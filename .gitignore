@@ -7,3 +7,19 @@ Thumbs.db
 .firebase/
 .firebaserc.local
 firebase-debug.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# Pipeline runtime data (never commit API responses or results)
+data/cache/
+data/results/
+data/pipeline_manifest.json
