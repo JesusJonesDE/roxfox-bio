@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO -->
+  <title>RoxFox Bio — AI-Driven Drug Discovery for Rare Neurodegeneration</title>
+  <meta name="description" content="RoxFox Bio uses AI-driven computational drug discovery to develop small molecule treatments for rare neurodegenerative diseases including SMA, SMARD1, and FTD. Pre-clinical pipeline." />
+  <link rel="canonical" href="https://roxfoxbio.com/" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="RoxFox Bio — AI-Driven Drug Discovery for Rare Neurodegeneration" />
+  <meta property="og:description" content="Developing small molecule treatments for rare neurodegenerative diseases using AI-driven computational discovery. Pre-clinical pipeline across SMA, SMARD1, and FTD." />
+  <meta property="og:image" content="https://roxfoxbio.com/assets/og-image.png" />
+  <meta property="og:url" content="https://roxfoxbio.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="RoxFox Bio" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="RoxFox Bio — AI-Driven Drug Discovery" />
+  <meta name="twitter:description" content="Small molecule treatments for rare neurodegenerative diseases. AI-driven pipeline." />
+  <meta name="twitter:image" content="https://roxfoxbio.com/assets/og-image.png" />
+
+  <!-- Mobile -->
+  <meta name="theme-color" content="#0A1628" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy:  '#0A1628',
+            teal:  '#00D4C8',
+            slate: '#64748B',
+          },
+          fontFamily: {
+            display: ['"DM Serif Display"', 'Georgia', 'serif'],
+            body:    ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "RoxFox Bio",
+    "url": "https://roxfoxbio.com",
+    "description": "AI-driven computational drug discovery for rare neurodegenerative diseases.",
+    "foundingDate": "2026",
+    "sameAs": []
+  }
+  </script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #0A1628; color: #F8FAFC; }
+
+    /* Gradient hero background */
+    .hero-bg {
+      background: radial-gradient(ellipse at 20% 50%, rgba(0,212,200,0.08) 0%, transparent 60%),
+                  radial-gradient(ellipse at 80% 20%, rgba(0,212,200,0.05) 0%, transparent 50%),
+                  #0A1628;
+    }
+
+    /* Animated teal underline on nav links */
+    .nav-link {
+      position: relative;
+    }
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: -2px; left: 0;
+      width: 0; height: 1px;
+      background: #00D4C8;
+      transition: width 0.2s ease;
+    }
+    .nav-link:hover::after { width: 100%; }
+
+    /* Pipeline table */
+    .pipeline-row:hover { background: rgba(0,212,200,0.04); }
+
+    /* Phase badge */
+    .badge-preclinical {
+      background: rgba(0,212,200,0.12);
+      color: #00D4C8;
+      border: 1px solid rgba(0,212,200,0.3);
+    }
+  </style>
+</head>
+
+<body class="font-body antialiased">
+
+  <!-- ═══════════════════════════ NAV ═══════════════════════════ -->
+  <header class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-navy/90 backdrop-blur-sm">
+    <div class="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
+
+      <!-- Logo -->
+      <a href="#" class="text-white font-semibold tracking-tight text-lg">
+        RoxFox <span class="text-teal">Bio</span>
+      </a>
+
+      <!-- Desktop nav -->
+      <nav class="hidden md:flex items-center gap-8 text-sm text-slate">
+        <a href="#platform" class="nav-link hover:text-white transition-colors">Platform</a>
+        <a href="#pipeline" class="nav-link hover:text-white transition-colors">Pipeline</a>
+        <a href="#team"     class="nav-link hover:text-white transition-colors">Team</a>
+        <a href="#contact"  class="bg-teal text-navy font-semibold px-4 py-2 rounded text-sm hover:bg-teal/90 transition-colors">Contact</a>
+      </nav>
+
+      <!-- Mobile menu button -->
+      <button id="menuBtn" class="md:hidden text-slate hover:text-white p-2" aria-label="Open menu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Mobile nav -->
+    <div id="mobileMenu" class="hidden md:hidden border-t border-white/5 bg-navy px-6 py-4 flex flex-col gap-4 text-sm text-slate">
+      <a href="#platform" class="hover:text-white transition-colors" onclick="closeMobileMenu()">Platform</a>
+      <a href="#pipeline" class="hover:text-white transition-colors" onclick="closeMobileMenu()">Pipeline</a>
+      <a href="#team"     class="hover:text-white transition-colors" onclick="closeMobileMenu()">Team</a>
+      <a href="#contact"  class="text-teal font-semibold"            onclick="closeMobileMenu()">Contact</a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+    <section class="hero-bg min-h-screen flex items-center pt-16">
+      <div class="max-w-6xl mx-auto px-6 py-24 md:py-32">
+        <div class="max-w-3xl">
+
+          <!-- Eyebrow -->
+          <div class="inline-flex items-center gap-2 text-teal text-xs font-medium tracking-widest uppercase mb-6 border border-teal/20 rounded-full px-3 py-1">
+            <span class="w-1.5 h-1.5 bg-teal rounded-full animate-pulse"></span>
+            Pre-Clinical Pipeline
+          </div>
+
+          <!-- Headline -->
+          <h1 class="font-display text-4xl md:text-5xl lg:text-6xl text-white leading-tight mb-6">
+            Discovering Treatments<br />
+            for Rare Neurological<br />
+            <span class="text-teal">Diseases.</span>
+          </h1>
+
+          <!-- Subheading -->
+          <p class="text-slate text-lg md:text-xl leading-relaxed mb-10 max-w-xl">
+            We use AI-driven computational discovery to identify and develop small molecule candidates for rare neurodegenerative conditions with no approved treatments.
+          </p>
+
+          <!-- CTAs -->
+          <div class="flex flex-wrap gap-4">
+            <a href="#pipeline"
+               class="bg-teal text-navy font-semibold px-6 py-3 rounded hover:bg-teal/90 transition-colors text-sm">
+              Our Pipeline
+            </a>
+            <a href="#contact"
+               class="border border-white/20 text-white px-6 py-3 rounded hover:border-teal/50 hover:text-teal transition-colors text-sm">
+              Contact Us
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ PLATFORM ═══════════════════════════ -->
+    <section id="platform" class="py-24 bg-[#0D1E36]">
+      <div class="max-w-6xl mx-auto px-6">
+
+        <!-- Section header -->
+        <div class="mb-16">
+          <p class="text-teal text-xs font-medium tracking-widest uppercase mb-3">Our Approach</p>
+          <h2 class="font-display text-3xl md:text-4xl text-white mb-4">AI-Driven Discovery Platform</h2>
+          <p class="text-slate max-w-2xl leading-relaxed">
+            Our platform integrates human genetic evidence, structural biology, and machine learning to identify and validate drug targets — compressing a multi-year discovery process into months.
+          </p>
+        </div>
+
+        <!-- Feature grid -->
+        <div class="grid md:grid-cols-3 gap-6 mb-16">
+
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6 hover:border-teal/20 transition-colors">
+            <div class="w-10 h-10 bg-teal/10 rounded-lg flex items-center justify-center mb-4">
+              <svg class="w-5 h-5 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+            </div>
+            <h3 class="text-white font-semibold mb-2">Genetic Evidence Scoring</h3>
+            <p class="text-slate text-sm leading-relaxed">We rank disease targets by the strength of human genetic validation — prioritising proteins where nature has already confirmed biological relevance.</p>
+          </div>
+
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6 hover:border-teal/20 transition-colors">
+            <div class="w-10 h-10 bg-teal/10 rounded-lg flex items-center justify-center mb-4">
+              <svg class="w-5 h-5 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+              </svg>
+            </div>
+            <h3 class="text-white font-semibold mb-2">Structure-Based Screening</h3>
+            <p class="text-slate text-sm leading-relaxed">Using high-resolution protein structures, we computationally screen millions of small molecule candidates to identify those with the strongest binding potential.</p>
+          </div>
+
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6 hover:border-teal/20 transition-colors">
+            <div class="w-10 h-10 bg-teal/10 rounded-lg flex items-center justify-center mb-4">
+              <svg class="w-5 h-5 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+            </div>
+            <h3 class="text-white font-semibold mb-2">ADMET Prediction</h3>
+            <p class="text-slate text-sm leading-relaxed">Before any wet-lab investment, we filter candidates for predicted absorption, distribution, metabolism, excretion, and toxicity — focusing resources on developable molecules.</p>
+          </div>
+        </div>
+
+        <!-- Narrative -->
+        <div class="grid md:grid-cols-2 gap-8 border-t border-white/5 pt-12">
+          <div>
+            <h3 class="text-white font-semibold mb-3">Target Identification</h3>
+            <p class="text-slate text-sm leading-relaxed">
+              We begin by mining large-scale human genetic and genomic datasets to identify proteins with the strongest causal links to disease. By combining evidence from population genetics, rare variant studies, and gene expression data, we build a high-confidence target list before committing to any chemistry.
+            </p>
+          </div>
+          <div>
+            <h3 class="text-white font-semibold mb-3">From Computation to the Clinic</h3>
+            <p class="text-slate text-sm leading-relaxed">
+              Our computational pipeline generates validated small molecule candidates ready for IND-enabling studies. We partner with specialist CROs for in vitro and in vivo validation, with a target timeline of IND-enabling studies in 2026–2027 for our lead program.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ PIPELINE ═══════════════════════════ -->
+    <section id="pipeline" class="py-24 bg-navy">
+      <div class="max-w-6xl mx-auto px-6">
+
+        <div class="mb-12">
+          <p class="text-teal text-xs font-medium tracking-widest uppercase mb-3">Programs</p>
+          <h2 class="font-display text-3xl md:text-4xl text-white mb-4">Our Pipeline</h2>
+          <p class="text-slate max-w-2xl leading-relaxed">
+            Three programs targeting rare neurodegenerative diseases with no approved small molecule treatments. All programs are in the computational pre-clinical discovery stage.
+          </p>
+        </div>
+
+        <!-- Pipeline table — desktop -->
+        <div class="hidden md:block overflow-hidden rounded-xl border border-white/5">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-white/5 text-xs text-slate uppercase tracking-wider">
+                <th class="text-left px-6 py-4 font-medium">Program</th>
+                <th class="text-left px-6 py-4 font-medium">Indication</th>
+                <th class="text-left px-6 py-4 font-medium">Unmet Need</th>
+                <th class="text-left px-6 py-4 font-medium">Modality</th>
+                <th class="text-left px-6 py-4 font-medium">Stage</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              <tr class="pipeline-row transition-colors">
+                <td class="px-6 py-5">
+                  <span class="font-mono text-teal font-semibold">RXF-001</span>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="text-white font-medium">Spinal Muscular Atrophy</div>
+                  <div class="text-slate text-xs mt-0.5">Rare SMA subtype</div>
+                </td>
+                <td class="px-6 py-5 text-slate text-xs max-w-xs">No approved treatment for this subtype. Existing SMN-targeting drugs are ineffective for this patient population.</td>
+                <td class="px-6 py-5 text-slate">Small Molecule</td>
+                <td class="px-6 py-5">
+                  <span class="badge-preclinical text-xs font-medium px-2.5 py-1 rounded-full">Pre-Clinical</span>
+                </td>
+              </tr>
+              <tr class="pipeline-row transition-colors">
+                <td class="px-6 py-5">
+                  <span class="font-mono text-teal font-semibold">RXF-002</span>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="text-white font-medium">SMARD1</div>
+                  <div class="text-slate text-xs mt-0.5">SMA with Respiratory Distress Type 1</div>
+                </td>
+                <td class="px-6 py-5 text-slate text-xs max-w-xs">Ultra-rare disease with zero approved treatments. Among the highest genetic validation scores in our target screen.</td>
+                <td class="px-6 py-5 text-slate">Small Molecule</td>
+                <td class="px-6 py-5">
+                  <span class="badge-preclinical text-xs font-medium px-2.5 py-1 rounded-full">Pre-Clinical</span>
+                </td>
+              </tr>
+              <tr class="pipeline-row transition-colors">
+                <td class="px-6 py-5">
+                  <span class="font-mono text-teal font-semibold">RXF-003</span>
+                </td>
+                <td class="px-6 py-5">
+                  <div class="text-white font-medium">Frontotemporal Dementia</div>
+                  <div class="text-slate text-xs mt-0.5">Genetic FTD subtype</div>
+                </td>
+                <td class="px-6 py-5 text-slate text-xs max-w-xs">No approved disease-modifying therapy. Strong genetic causation and extensive structural biology data support our target.</td>
+                <td class="px-6 py-5 text-slate">Small Molecule</td>
+                <td class="px-6 py-5">
+                  <span class="badge-preclinical text-xs font-medium px-2.5 py-1 rounded-full">Pre-Clinical</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pipeline cards — mobile -->
+        <div class="md:hidden space-y-4">
+          <div class="bg-[#0D1E36] border border-white/5 rounded-xl p-5">
+            <div class="flex items-start justify-between mb-3">
+              <span class="font-mono text-teal font-semibold text-sm">RXF-001</span>
+              <span class="badge-preclinical text-xs font-medium px-2 py-0.5 rounded-full">Pre-Clinical</span>
+            </div>
+            <div class="text-white font-medium mb-1">Spinal Muscular Atrophy</div>
+            <div class="text-slate text-xs mb-3">Rare SMA subtype · Small Molecule</div>
+            <p class="text-slate text-xs leading-relaxed">No approved treatment for this subtype. Existing SMN-targeting drugs are ineffective for this patient population.</p>
+          </div>
+          <div class="bg-[#0D1E36] border border-white/5 rounded-xl p-5">
+            <div class="flex items-start justify-between mb-3">
+              <span class="font-mono text-teal font-semibold text-sm">RXF-002</span>
+              <span class="badge-preclinical text-xs font-medium px-2 py-0.5 rounded-full">Pre-Clinical</span>
+            </div>
+            <div class="text-white font-medium mb-1">SMARD1</div>
+            <div class="text-slate text-xs mb-3">SMA with Respiratory Distress · Small Molecule</div>
+            <p class="text-slate text-xs leading-relaxed">Ultra-rare disease with zero approved treatments. Highest genetic validation score in our target screen.</p>
+          </div>
+          <div class="bg-[#0D1E36] border border-white/5 rounded-xl p-5">
+            <div class="flex items-start justify-between mb-3">
+              <span class="font-mono text-teal font-semibold text-sm">RXF-003</span>
+              <span class="badge-preclinical text-xs font-medium px-2 py-0.5 rounded-full">Pre-Clinical</span>
+            </div>
+            <div class="text-white font-medium mb-1">Frontotemporal Dementia</div>
+            <div class="text-slate text-xs mb-3">Genetic FTD subtype · Small Molecule</div>
+            <p class="text-slate text-xs leading-relaxed">No approved disease-modifying therapy. Strong genetic causation and extensive structural biology data support our target.</p>
+          </div>
+        </div>
+
+        <!-- Stage legend -->
+        <div class="mt-8 flex flex-wrap items-center gap-6 text-xs text-slate border-t border-white/5 pt-6">
+          <div class="flex items-center gap-2">
+            <span class="badge-preclinical text-xs px-2 py-0.5 rounded-full">Pre-Clinical</span>
+            <span>Computational discovery — target validated, lead molecules identified in silico</span>
+          </div>
+          <div class="ml-auto italic">
+            Target proteins disclosed upon patent filing
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ TEAM ═══════════════════════════ -->
+    <section id="team" class="py-24 bg-[#0D1E36]">
+      <div class="max-w-6xl mx-auto px-6">
+
+        <div class="mb-12">
+          <p class="text-teal text-xs font-medium tracking-widest uppercase mb-3">People</p>
+          <h2 class="font-display text-3xl md:text-4xl text-white mb-4">Our Team</h2>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-6">
+
+          <!-- Founder card -->
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6">
+            <div class="w-14 h-14 bg-teal/10 rounded-full flex items-center justify-center mb-4 text-teal text-xl font-display">
+              F
+            </div>
+            <div class="text-white font-semibold mb-0.5">[Founder Name]</div>
+            <div class="text-teal text-xs font-medium mb-3">Founder &amp; CEO</div>
+            <p class="text-slate text-sm leading-relaxed">Background in medical computer science and AI-driven drug discovery. Building the next generation of computational biotech.</p>
+          </div>
+
+          <!-- SAB placeholder -->
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6 border-dashed">
+            <div class="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center mb-4">
+              <svg class="w-6 h-6 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+              </svg>
+            </div>
+            <div class="text-white font-semibold mb-0.5">Scientific Advisory Board</div>
+            <div class="text-slate text-xs font-medium mb-3">Forming</div>
+            <p class="text-slate text-sm leading-relaxed">We are assembling a scientific advisory board of leading experts in neurodegeneration and drug discovery.</p>
+          </div>
+
+          <!-- Open positions -->
+          <div class="bg-navy/60 border border-white/5 rounded-xl p-6 border-dashed">
+            <div class="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center mb-4">
+              <svg class="w-6 h-6 text-slate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              </svg>
+            </div>
+            <div class="text-white font-semibold mb-0.5">We're Hiring</div>
+            <div class="text-slate text-xs font-medium mb-3">Open Positions</div>
+            <p class="text-slate text-sm leading-relaxed">Looking for a computational chemist and a neuroscience advisor to join our growing team.</p>
+            <a href="#contact" class="inline-block mt-3 text-teal text-xs font-medium hover:underline">Get in touch →</a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ CONTACT ═══════════════════════════ -->
+    <section id="contact" class="py-24 bg-navy">
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="max-w-2xl">
+
+          <p class="text-teal text-xs font-medium tracking-widest uppercase mb-3">Get In Touch</p>
+          <h2 class="font-display text-3xl md:text-4xl text-white mb-4">Partner With Us</h2>
+          <p class="text-slate text-lg leading-relaxed mb-8">
+            We welcome conversations with investors, scientists, and patient advocacy organisations who share our commitment to rare neurological diseases.
+          </p>
+
+          <div class="space-y-4 mb-10">
+            <div class="flex items-start gap-3">
+              <div class="w-1 h-1 bg-teal rounded-full mt-2 shrink-0"></div>
+              <p class="text-slate text-sm"><span class="text-white font-medium">Investors:</span> We are building toward a seed round. If you invest in early-stage computational biotech or rare disease, we would welcome an introductory call.</p>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="w-1 h-1 bg-teal rounded-full mt-2 shrink-0"></div>
+              <p class="text-slate text-sm"><span class="text-white font-medium">Scientists &amp; Collaborators:</span> We are actively seeking scientific advisors with expertise in neurodegeneration, structural biology, or motor neuron disease.</p>
+            </div>
+          </div>
+
+          <a href="mailto:hello@roxfoxbio.com"
+             class="inline-flex items-center gap-2 bg-teal text-navy font-semibold px-8 py-4 rounded text-base hover:bg-teal/90 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            hello@roxfoxbio.com
+          </a>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+  <footer class="border-t border-white/5 bg-[#080F1E] py-8">
+    <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate">
+      <div>
+        <span class="text-white font-semibold">RoxFox <span class="text-teal">Bio</span></span>
+        <span class="mx-2">·</span>
+        AI-Driven Drug Discovery
+      </div>
+      <div>
+        &copy; <span id="year"></span> RoxFox Bio. All rights reserved.
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Inject current year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Mobile nav toggle
+    const menuBtn = document.getElementById('menuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    menuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+
+    function closeMobileMenu() {
+      mobileMenu.classList.add('hidden');
+    }
+
+    // Close mobile menu on outside click
+    document.addEventListener('click', (e) => {
+      if (!menuBtn.contains(e.target) && !mobileMenu.contains(e.target)) {
+        mobileMenu.classList.add('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>

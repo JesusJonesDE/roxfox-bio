@@ -59,7 +59,7 @@ The founder shares the website URL in email introductions, grant applications, a
 ### Edge Cases
 
 - If the team section has only one person, it should display a single founder card with a note that the team is growing
-- If the contact form is submitted with missing required fields, inline validation errors appear before submission
+
 - If a visitor searches for the program code names, no additional proprietary information should be discoverable beyond what is on the page
 
 ## Requirements *(mandatory)*
@@ -71,11 +71,14 @@ The founder shares the website URL in email introductions, grant applications, a
 - **FR-003**: Site MUST include a pipeline table with columns: Program Code, Disease Indication, Modality, Stage
 - **FR-004**: Pipeline table MUST use internal program codes (e.g. RXF-001) rather than target protein names, and MUST NOT display molecule structures, binding data, or any other proprietary chemistry
 - **FR-005**: Site MUST include a team section; at minimum a single founder card plus a note that the team is being built
-- **FR-006**: Site MUST include a contact/investor inquiry section with a working email link or embedded form
+- **FR-006**: Site MUST include a contact/investor inquiry section with a direct email link (mailto) — no form required
 - **FR-007**: Site MUST be a single page — no blog, no news, no pricing
 - **FR-008**: Site MUST load in under 3 seconds on a standard broadband connection
 - **FR-009**: Site MUST be fully responsive across desktop, tablet, and mobile viewports
 - **FR-010**: Visual design MUST match the aesthetic standard of established AI biotech companies — clean, modern, scientific
+- **FR-011**: Site MUST include complete SEO meta tags: `<title>`, `<meta name="description">`, Open Graph tags (`og:title`, `og:description`, `og:image`, `og:url`), and Twitter Card tags
+- **FR-012**: Site MUST use semantic HTML5 structure (`<header>`, `<main>`, `<section>`, `<footer>`, proper heading hierarchy h1→h2→h3) to support search engine indexing
+- **FR-013**: Site MUST include a `sitemap.xml` and `robots.txt` to guide crawlers
 
 ### Key Entities
 
@@ -91,8 +94,10 @@ The founder shares the website URL in email introductions, grant applications, a
 - **SC-002**: The full page loads in under 3 seconds on a standard broadband connection
 - **SC-003**: All 3 pipeline programs are visible within the pipeline section without horizontal scrolling on desktop
 - **SC-004**: The site renders correctly on screen widths from 375px to 1920px
-- **SC-005**: An investor can locate and use the contact mechanism within 60 seconds of arriving
+- **SC-005**: An investor can locate the contact email within 60 seconds of arriving
 - **SC-006**: Zero proprietary scientific data (structures, potency values, target names) is present anywhere on the site
+- **SC-007**: Lighthouse SEO audit score ≥ 95
+- **SC-008**: The company name and disease focus appear in the page `<title>` and meta description, making the site indexable for relevant search queries
 
 ## Assumptions
 
