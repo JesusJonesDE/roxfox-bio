@@ -449,6 +449,130 @@ def structalign(
     raise typer.Exit(exit_code)
 
 
+# ── biomarker ──────────────────────────────────────────────────────────────────
+
+@app.command()
+def biomarker(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    lineage: str = typer.Option(..., "--lineage", help='OncotreeLineage to analyse (e.g. "CNS/Brain")'),
+    force: bool = typer.Option(False, "--force", help="Re-run even if cached output exists"),
+    min_lines: int = typer.Option(3, "--min-lines", help="Min dependent lines with mutation for inclusion"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Compute co-mutation enrichment biomarker for a target's DepMap lineage."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.biomarker.biomarker import run_biomarker
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — biomarker")
+        try:
+            run_biomarker(gene, lineage, settings, cache, force, min_lines, console)
+        except ValueError as exc:
+            console.print(f"  [red]{gene} biomarker FAIL: {exc}[/red]")
+            exit_code = 1
+        except Exception as exc:
+            console.print(f"  [red]{gene} biomarker FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── dock ───────────────────────────────────────────────────────────────────────
+
+@app.command()
+def dock(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    scaffold: Optional[str] = typer.Option(None, "--scaffold", help="Scaffold ID from compound library (e.g. SCF-013)"),
+    all_scaffolds: bool = typer.Option(False, "--all-scaffolds", help="Dock all scaffolds in compound library"),
+    force: bool = typer.Option(False, "--force", help="Re-run even if cached output exists"),
+    exhaustiveness: int = typer.Option(32, "--exhaustiveness", help="Vina exhaustiveness parameter"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Dock a scaffold into the target binding site using AutoDock Vina."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.dock.dock import run_dock
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    if not scaffold and not all_scaffolds:
+        console.print("[red]Specify --scaffold <ID> or --all-scaffolds[/red]")
+        raise typer.Exit(1)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — dock")
+        # Resolve scaffold list
+        scaffolds_to_run: list[str] = []
+        if scaffold:
+            scaffolds_to_run = [scaffold]
+        elif all_scaffolds:
+            import pandas as _pd
+            results_dir = settings.results_dir / gene
+            compounds_csv = results_dir / "compounds_filtered.csv"
+            if compounds_csv.exists():
+                df = _pd.read_csv(compounds_csv)
+                id_col = next(
+                    (c for c in ("scaffold_id", "compound_id", "molecule_chembl_id") if c in df.columns),
+                    None,
+                )
+                scaffolds_to_run = df[id_col].dropna().tolist() if id_col else []
+            else:
+                console.print(f"  [red]compounds_filtered.csv not found for {gene}[/red]")
+                exit_code = 1
+                continue
+
+        for scf in scaffolds_to_run:
+            try:
+                run_dock(gene, scf, settings, cache, force, exhaustiveness, console)
+            except RuntimeError as exc:
+                console.print(f"  [red]{exc}[/red]")
+                exit_code = 1
+            except Exception as exc:
+                console.print(f"  [red]{gene} dock {scf} FAIL: {exc}[/red]")
+                exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── cocrystal ──────────────────────────────────────────────────────────────────
+
+@app.command()
+def cocrystal(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    scaffold: str = typer.Option(..., "--scaffold", help="Scaffold ID (e.g. SCF-013)"),
+    force: bool = typer.Option(False, "--force", help="Re-generate even if brief already exists"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Generate a co-crystallisation experimental brief for a target/scaffold pair."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.cocrystal.cocrystal import run_cocrystal
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — cocrystal")
+        try:
+            run_cocrystal(gene, scaffold, settings, cache, force, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} cocrystal FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @app.command()

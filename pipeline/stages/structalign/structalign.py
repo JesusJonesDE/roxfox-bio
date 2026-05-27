@@ -354,6 +354,35 @@ def _superimpose(
 
 # ── Difference type classification ────────────────────────────────────────────
 
+def _classify_three_way(vrk1_aa: str, vrk2_aa: str, egfr_aa: str) -> str:
+    """Classify selectivity of a KLIFS position across VRK1, VRK2, EGFR.
+
+    Returns one of:
+      "VRK1-specific"      — VRK1 differs from both VRK2 and EGFR
+      "pan-VRK vs EGFR"   — VRK1 == VRK2, both differ from EGFR
+      "VRK2 vs VRK1+EGFR" — VRK1 == EGFR, VRK2 differs
+      "conserved"          — all three are equal
+    GAP and LOW_CONF are treated as non-matching any other residue.
+    """
+    _non_residue = {"GAP", "_", "-", "X", "LOW_CONF", "N/A", None, ""}
+
+    def _eq(a: str, b: str) -> bool:
+        if a in _non_residue or b in _non_residue:
+            return False
+        return a == b
+
+    v1_eq_v2 = _eq(vrk1_aa, vrk2_aa)
+    v1_eq_eg = _eq(vrk1_aa, egfr_aa)
+
+    if v1_eq_v2 and v1_eq_eg:
+        return "conserved"
+    if v1_eq_v2 and not v1_eq_eg:
+        return "pan-VRK vs EGFR"
+    if not v1_eq_v2 and v1_eq_eg:
+        return "VRK2 vs VRK1+EGFR"
+    return "VRK1-specific"
+
+
 def _classify_difference(aa1: str, aa2: str) -> str:
     for aa in (aa1, aa2):
         if aa in ("GAP", "_", "-", "X", None, ""):
@@ -413,19 +442,31 @@ def _build_comparison(
         vrk2_aa = vrk2_map.get(pos, ("N/A", ""))[0] if vrk2_klifs is not None else "N/A"
 
         diff = _classify_difference(vrk1_aa, egfr_aa)
-        rows.append({
+        vrk1_vrk2_diff = (
+            _classify_difference(vrk1_aa, vrk2_aa)
+            if vrk2_klifs is not None else None
+        )
+        selectivity_class = (
+            _classify_three_way(vrk1_aa, vrk2_aa, egfr_aa)
+            if vrk2_klifs is not None else None
+        )
+        row: dict = {
             "klifs_position": pos,
             "subpocket": subpocket,
             "vrk1_aa": vrk1_aa,
             "egfr_aa": egfr_aa,
-            "vrk2_aa": vrk2_aa,
             "identical_vrk1_egfr": diff == "identical",
             "difference_type": diff,
             "selectivity_candidate": _is_selectivity_candidate(diff, subpocket),
             "is_gatekeeper": pos == GATEKEEPER_POS,
             "is_hinge": pos in HINGE_POSITIONS,
             "notes": "",
-        })
+        }
+        if vrk2_klifs is not None:
+            row["vrk2_aa"] = vrk2_aa
+            row["vrk1_vrk2_diff"] = vrk1_vrk2_diff
+            row["selectivity_class"] = selectivity_class
+        rows.append(row)
 
     df = pd.DataFrame(rows)
 
@@ -542,7 +583,12 @@ def _write_report(
     gk = comparison[comparison["is_gatekeeper"]]
     gk_vrk1 = gk.iloc[0]["vrk1_aa"] if len(gk) > 0 else "?"
     gk_egfr = gk.iloc[0]["egfr_aa"] if len(gk) > 0 else "?"
-    gk_vrk2 = gk.iloc[0]["vrk2_aa"] if (len(gk) > 0 and gk.iloc[0]["vrk2_aa"] != "N/A") else None
+    has_vrk2_cols = "vrk2_aa" in comparison.columns
+    gk_vrk2 = (
+        gk.iloc[0]["vrk2_aa"]
+        if (has_vrk2_cols and len(gk) > 0 and gk.iloc[0]["vrk2_aa"] not in ("N/A", "GAP", "LOW_CONF", ""))
+        else None
+    )
 
     n_differ = int((comparison["difference_type"] != "identical").sum())
     candidates = comparison[comparison["selectivity_candidate"]]
@@ -554,14 +600,24 @@ def _write_report(
     ]
 
     vrk2_section = ""
-    if vrk2_source:
-        vrk2_differ = comparison[
-            (comparison["vrk2_aa"] != "N/A") &
-            (comparison["vrk2_aa"] != "LOW_CONF") &
-            (comparison["vrk1_aa"] != comparison["vrk2_aa"]) &
-            (~comparison["is_gap"])
-        ]
+    if vrk2_source and has_vrk2_cols:
         vrk2_gk = gk_vrk2 or "?"
+        _non = {"GAP", "LOW_CONF", "N/A", ""}
+        sc = comparison["selectivity_class"]
+        n_vrk1_specific = int((sc == "VRK1-specific").sum())
+        n_pan_vrk = int((sc == "pan-VRK vs EGFR").sum())
+        n_vrk2_specific = int((sc == "VRK2 vs VRK1+EGFR").sum())
+        n_conserved = int((sc == "conserved").sum())
+
+        vrk1_specific_cands = comparison[
+            (comparison["selectivity_class"] == "VRK1-specific") &
+            comparison["selectivity_candidate"]
+        ]
+        vrk1_cand_rows = [
+            f"| {int(r.klifs_position)} | {r.subpocket} | {r.vrk1_aa} | {r.vrk2_aa} | {r.egfr_aa} |"
+            for _, r in vrk1_specific_cands.iterrows()
+        ]
+
         vrk2_section = f"""
 ---
 
@@ -569,12 +625,29 @@ def _write_report(
 
 **VRK2 source**: {vrk2_source}
 
-Gatekeeper (KLIFS position 45): VRK1 **{gk_vrk1}** | VRK2 **{vrk2_gk}** | EGFR **{gk_egfr}**
+### Selectivity Class Counts (all 85 KLIFS positions)
 
-Positions where VRK1 and VRK2 differ: **{len(vrk2_differ)}**
+| Class | Count | Meaning |
+|-------|-------|---------|
+| VRK1-specific | {n_vrk1_specific} | VRK1 ≠ VRK2 and VRK1 ≠ EGFR — unique to VRK1 |
+| pan-VRK vs EGFR | {n_pan_vrk} | VRK1 = VRK2 ≠ EGFR — shared VRK handle, avoids EGFR |
+| VRK2 vs VRK1+EGFR | {n_vrk2_specific} | VRK2 ≠ VRK1 = EGFR — VRK2-specific position |
+| conserved | {n_conserved} | VRK1 = VRK2 = EGFR — not useful for selectivity |
 
-A VRK1-selective inhibitor must exploit positions where VRK1 ≠ VRK2 (VRK1-unique handle).
-Positions where VRK1 = VRK2 ≠ EGFR are pan-VRK selectivity handles (avoid EGFR, hit both VRK paralogs).
+### Gatekeeper (KLIFS position 45)
+
+VRK1 **{gk_vrk1}** | VRK2 **{vrk2_gk}** | EGFR **{gk_egfr}**
+
+### VRK1-Specific Selectivity Candidates
+
+Positions where VRK1 ≠ VRK2, VRK1 ≠ EGFR, **and** in a key subpocket — prime targets for VRK1-only inhibitors.
+
+| KLIFS Position | Subpocket | VRK1 | VRK2 | EGFR |
+|---------------|-----------|------|------|------|
+{chr(10).join(vrk1_cand_rows) if vrk1_cand_rows else "| — | No VRK1-specific selectivity candidates | — | — | — |"}
+
+A VRK1-selective inhibitor must exploit VRK1-specific positions (VRK1 ≠ VRK2 AND VRK1 ≠ EGFR).
+Pan-VRK positions (VRK1 = VRK2 ≠ EGFR) are useful for avoiding EGFR while still hitting both VRK paralogs.
 """
 
     res_str = f"{vrk1_resolution:.2f} Å" if vrk1_resolution else "unknown resolution"
