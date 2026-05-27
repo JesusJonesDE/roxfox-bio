@@ -25,24 +25,24 @@ def _get(url: str, params: dict) -> dict:
 
 
 def _resolve_chembl_target_id(uniprot_id: str) -> str:
-    data = _get(f"{CHEMBL_BASE}/target", {"search": uniprot_id, "format": "json"})
+    # Use the component accession filter — exact UniProt match, not free-text search
+    data = _get(f"{CHEMBL_BASE}/target", {
+        "target_components__accession": uniprot_id,
+        "target_type": "SINGLE PROTEIN",
+        "format": "json",
+    })
     targets = data.get("targets", [])
-    for t in targets:
-        # Prefer SINGLE PROTEIN entries
-        if t.get("target_type") == "SINGLE PROTEIN":
-            for comp in t.get("target_components", []):
-                for xref in comp.get("target_component_xrefs", []):
-                    if xref.get("xref_src_db") == "UniProt" and xref.get("xref_id") == uniprot_id:
-                        return t["target_chembl_id"]
-    # Fallback: first result
     if targets:
         return targets[0]["target_chembl_id"]
-    raise ValueError(f"No ChEMBL target found for UniProt {uniprot_id}")
+    raise ValueError(f"No ChEMBL SINGLE PROTEIN target found for UniProt {uniprot_id}")
 
 
 def fetch_chembl(target: Target, settings: Settings) -> tuple[dict, int]:
-    chembl_id = _resolve_chembl_target_id(target.uniprot_id)
-    target.chembl_id = chembl_id
+    # Use hardcoded ChEMBL ID if available; avoids fragile API lookup
+    if target.chembl_id is None:
+        return {"note": f"{target.gene_name} has no ChEMBL target entry", "activities": []}, 0
+
+    chembl_id = target.chembl_id or _resolve_chembl_target_id(target.uniprot_id)
 
     records = []
     offset = 0

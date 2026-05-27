@@ -284,6 +284,171 @@ def run(
     raise typer.Exit(exit_code)
 
 
+# ── oncology ───────────────────────────────────────────────────────────────────
+
+@app.command()
+def oncology(
+    target: Optional[str] = typer.Option(None, "--target", "-t"),
+    all_targets: bool = typer.Option(False, "--all"),
+    series: str = typer.Option("SCF-013,SCF-001", "--series", help="Comma-separated scaffold IDs for SAR + IP sweep"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir"),
+    max_age: int = typer.Option(30, "--max-age"),
+):
+    """Run oncology analysis: OT evidence, kinome selectivity, IP sweep, and SAR."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.oncology.ot_oncology import run_ot_oncology
+    from pipeline.stages.oncology.selectivity_kinome import run_selectivity_kinome
+    from pipeline.stages.oncology.ip_sweep import run_ip_sweep
+    from pipeline.stages.oncology.sar_analysis import run_sar_analysis
+
+    settings = _make_settings(data_dir, max_age)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+    series_ids = [s.strip() for s in series.split(",") if s.strip()]
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — oncology")
+
+        steps = [
+            ("OT oncology evidence", lambda g=gene: run_ot_oncology(g, settings, cache, console)),
+            ("kinome selectivity",   lambda g=gene: run_selectivity_kinome(g, settings, cache, console)),
+            ("IP sweep",             lambda g=gene: run_ip_sweep(g, series_ids, settings, cache, console)),
+        ]
+        for label, fn in steps:
+            try:
+                fn()
+            except Exception as exc:
+                console.print(f"  [red]{gene} {label} FAIL: {exc}[/red]")
+                exit_code = 1
+
+        for sid in series_ids:
+            try:
+                run_sar_analysis(gene, sid, settings, console)
+            except Exception as exc:
+                console.print(f"  [red]{gene} SAR {sid} FAIL: {exc}[/red]")
+                exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── pockets ────────────────────────────────────────────────────────────────────
+
+@app.command()
+def pockets(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. IGHMBP2)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir"),
+    max_age: int = typer.Option(30, "--max-age"),
+):
+    """Run fpocket druggability analysis on X-ray structures for the specified target(s)."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.pockets.pocket_analysis import run_pocket_analysis
+
+    settings = _make_settings(data_dir, max_age)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — pockets")
+        try:
+            run_pocket_analysis(gene, settings, cache, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} pockets FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── triage ─────────────────────────────────────────────────────────────────────
+
+@app.command()
+def triage(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir"),
+    max_age: int = typer.Option(30, "--max-age"),
+):
+    """Score and rank scaffolds from clean (Ro5-passing, selective) compounds."""
+    from pipeline.stages.triage.scaffold_triage import run_scaffold_triage
+
+    settings = _make_settings(data_dir, max_age)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — triage")
+        try:
+            run_scaffold_triage(gene, settings, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} triage FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── depmap ─────────────────────────────────────────────────────────────────────
+
+@app.command()
+def depmap(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    force: bool = typer.Option(False, "--force", help="Re-fetch even if cache is fresh"),
+    max_age: int = typer.Option(30, "--max-age", help="Cache freshness threshold in days"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Fetch DepMap CRISPR gene effect data and produce a ranked cancer lineage report."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.depmap.depmap import run_depmap
+
+    settings = _make_settings(data_dir, max_age)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — depmap")
+        try:
+            run_depmap(gene, settings, cache, force, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} depmap FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── structalign ────────────────────────────────────────────────────────────────
+
+@app.command()
+def structalign(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    include_vrk2: bool = typer.Option(False, "--include-vrk2", help="Include VRK2 in three-way comparison"),
+    force: bool = typer.Option(False, "--force", help="Re-run even if output files exist"),
+    cutoff: float = typer.Option(6.0, "--cutoff", help="Binding site distance cutoff in Å"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Align VRK1 vs. EGFR ATP binding sites and produce a residue-level selectivity report."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.structalign.structalign import run_structalign
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — structalign")
+        try:
+            run_structalign(gene, settings, cache, force, include_vrk2, cutoff, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} structalign FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @app.command()
