@@ -54,35 +54,17 @@ This takes ~30 minutes and gives you a ranked view of which scaffolds survive th
 
 ---
 
-## Scenario 3a: Full 50 ns MD — Metal plugin (local GPU, build required)
+## Scenario 3: Full 50 ns MD — Cloud GPU (~$5–10, < 6 hours)
 
 ```bash
-# Build the Metal plugin first (one-time, ~30 minutes):
-git clone https://github.com/openmm/openmm && cd openmm && git checkout 8.1_branch
-git clone https://github.com/philipturner/openmm-metal
-cd openmm-metal && bash build.sh --install --quick-tests
-
-# Then run (pipeline auto-detects Metal plugin):
-pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-metal
-```
-
-**Expected**: ~20–40 ns/day on M1 Max → 50 ns completes in 1–3 days. Run overnight or over a weekend.
-
-**Note**: The Metal plugin (`philipturner/openmm-metal`) is a community project, unmaintained since Aug 2024, and pinned to OpenMM 8.1. It works but carries maintenance risk. This is flagged in the MD report.
-
----
-
-## Scenario 3b: Full 50 ns MD — Cloud GPU (fastest, ~$5–10)
-
-```bash
-# Set your RunPod API key:
+# Set your RunPod API key (one-time):
 export RUNPOD_API_KEY=your_key_here
 
-# Dispatch to cloud:
-pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-cloud
+# Run the MD gate:
+pipeline validate --target VRK1 --scaffold SCF-009 --gate md
 ```
 
-**Expected**: 1–6 hours on A100, ~$5–10 per run. The pipeline submits the prepared system, polls for completion, and downloads results automatically.
+The pipeline prepares the system locally (PDBFixer + OpenMM parametrisation, ~5 min), submits to RunPod A100, polls for completion, and downloads results automatically. Expect 1–6 hours and ~$5–10 per scaffold.
 
 ---
 

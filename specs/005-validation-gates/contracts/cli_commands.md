@@ -21,8 +21,7 @@ pipeline validate [OPTIONS]
 | `--gate` | str | no | None | Run single gate: admet / mmgbsa / selectivity / md |
 | `--dashboard` | flag | no | False | Print gate dashboard and exit (no new gates run) |
 | `--force` | flag | no | False | Re-run gates even if cached results exist |
-| `--md-metal` | flag | no | False | With --gate md: use Metal plugin for 50 ns on M1 Max GPU (requires source-built plugin) |
-| `--md-cloud` | flag | no | False | With --gate md: dispatch 50 ns simulation to cloud GPU (requires RUNPOD_API_KEY env var) |
+| `--md-cloud` | flag | no | True | With --gate md: dispatch 50 ns simulation to RunPod A100 (requires RUNPOD_API_KEY env var) |
 | `--data-dir` | path | no | data/ | Override data directory |
 
 *Either --target or --all required.
@@ -72,11 +71,8 @@ pipeline validate --target VRK1 --dashboard
 # Force re-run selectivity gate ignoring cache
 pipeline validate --target VRK1 --scaffold SCF-009 --gate selectivity --force
 
-# Run 50 ns MD via Metal plugin (local GPU, requires source-built plugin)
-pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-metal
-
-# Run 50 ns MD via cloud GPU (~$5-10, requires RUNPOD_API_KEY)
-pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-cloud
+# Run 50 ns MD via cloud GPU (~$5-10, requires RUNPOD_API_KEY env var)
+pipeline validate --target VRK1 --scaffold SCF-009 --gate md
 ```
 
 ---
@@ -149,10 +145,8 @@ validate_selectivity_{scaffold_id}.md
 - Cached receptor PDB
 - Top docking pose PDBQT
 
-### Modes
-- **Tier 1 — Fast mode** (default): 2 ns implicit solvent (OBC/GB), ~1–2 h on M1 Max CPU. No extra dependencies.
-- **Tier 2 — Metal plugin** (`--md-metal`): 50 ns explicit solvent (TIP3P), ~20–40 ns/day on M1 Max Metal GPU (1–3 days). Requires source-built `openmm-metal` plugin. Pipeline auto-detects if installed.
-- **Tier 3 — Cloud** (`--md-cloud`): 50 ns explicit solvent, dispatched to RunPod A100. Requires `RUNPOD_API_KEY` env var. Completes in < 6 h at ~$5–10/run.
+### Mode
+50 ns explicit solvent (TIP3P), dispatched to RunPod A100. System is prepared locally then submitted via the RunPod API. Requires `RUNPOD_API_KEY` environment variable. Completes in < 6 h at ~$5–10/run.
 
 ### Outputs
 ```

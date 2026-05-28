@@ -109,36 +109,30 @@ conda create -n mmpbsa -c conda-forge gmx_mmpbsa gromacs ambertools rdkit openmm
 **Cloud GPU benchmark** (for reference):
 - RunPod / Lambda Labs A100: 100–800 ns/day for 60k-atom system; ~$5–10 per 50 ns run
 
-### Three-tier implementation
+### Decision: Cloud GPU only (RunPod)
 
-**Tier 1 — Fast mode (default, always available)**:
-2 ns implicit solvent (OBC/GB) on CPU, ~1 hour on M1 Max. Catches grossly unstable poses. Zero dependency risk. Gate pass/fail on RMSD ≤ 3.0 Å over final 1 ns.
+Local MD on Apple Silicon is not viable for production 50 ns simulations — the official OpenMM CPU path is too slow (0.5–2 ns/day) and the only Metal GPU path is an unmaintained community plugin pinned to a 2-year-old OpenMM version. Cloud is the cleanest, most reliable, and cheapest-per-run option.
 
-**Tier 2 — Metal plugin mode (`--md-metal` flag)**:
-50 ns explicit solvent using the community OpenMM Metal plugin. Requires user to build plugin from source (instructions provided in quickstart). Achieves ~20–40 ns/day → 50 ns completes in 1–3 days. Gate pass/fail on RMSD ≤ 3.0 Å over final 25 ns. The pipeline detects whether the plugin is installed and enables this flag automatically if present.
+**Cloud mode (RunPod A100)**:
+- User provides `RUNPOD_API_KEY` environment variable
+- Pipeline prepares the system locally (PDBFixer + OpenMM parametrisation), serialises to OpenMM XML
+- Submits job to RunPod serverless endpoint, polls for completion, downloads RMSD CSV + trajectory summary
+- ~$5–10 per 50 ns run; completes in 1–6 hours on A100
+- Pass/fail: mean ligand heavy-atom RMSD ≤ 3.0 Å over final 25 ns
 
-**Tier 3 — Cloud mode (`--md-cloud` flag)**:
-Dispatch the MD job to a cloud GPU provider (RunPod, Lambda Labs). User provides API key via environment variable (`RUNPOD_API_KEY` or `LAMBDA_API_KEY`). Submits job, polls for completion, downloads results. ~$5–10 per run, 1–6 hours for 50 ns on A100. Most reliable path to production-grade MD.
-
-**Default behaviour**: Tier 1 (fast mode) unless `--md-metal` or `--md-cloud` is specified.
+**Local preparation** (always runs locally before cloud submission):
+PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller + GAFF2/ff14SB parametrisation → energy minimisation → serialise system XML → submit to RunPod
 
 **Install**:
 ```bash
-# Base (all tiers)
-conda install -c conda-forge openmm openmmforcefields openff-toolkit mdtraj pdbfixer
+# Local preparation tools
+conda install -c conda-forge openmm openmmforcefields openff-toolkit pdbfixer
 
-# Tier 2 — Metal plugin (source build, optional)
-git clone https://github.com/openmm/openmm && cd openmm && git checkout 8.1_branch
-git clone https://github.com/philipturner/openmm-metal
-cd openmm-metal && bash build.sh --install --quick-tests
-
-# Tier 3 — Cloud (optional)
-pip install runpod  # or equivalent SDK
+# Cloud submission
+pip install runpod
 ```
 
-**Workflow**: PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller → minimise → equilibrate → NVT production → MDTraj RMSD analysis.
-
-**Updated spec success criterion SC-004**: "Fast mode (2 ns) completes in under 2 hours locally. Metal plugin mode (50 ns) completes in 1–3 days locally. Cloud mode (50 ns) completes in under 6 hours."
+**Updated spec success criterion SC-004**: "50 ns MD completes in under 6 hours via cloud GPU at a cost of ~$5–10 per scaffold."
 
 ---
 
@@ -154,24 +148,18 @@ pip install runpod  # or equivalent SDK
 # ADMET gate
 pip install admet-ai
 
-# MM-GBSA gate + MD gate (base)
-conda install -c conda-forge gmx_mmpbsa gromacs ambertools openmm openmmforcefields \
-  openff-toolkit mdtraj pdbfixer rdkit
+# MM-GBSA gate
+conda install -c conda-forge gmx_mmpbsa gromacs ambertools rdkit
 
-# MD gate Tier 2 — Metal plugin (optional, source build)
-# See quickstart.md for full instructions
-git clone https://github.com/openmm/openmm && cd openmm && git checkout 8.1_branch
-git clone https://github.com/philipturner/openmm-metal
-cd openmm-metal && bash build.sh --install --quick-tests
-
-# MD gate Tier 3 — Cloud (optional)
+# MD gate — local preparation + cloud submission
+conda install -c conda-forge openmm openmmforcefields openff-toolkit pdbfixer
 pip install runpod
 
-# Already installed: vina, meeko, biopython, pandas, rich, httpx
+# Already installed: vina, meeko, biopython, pandas, rich, httpx, mdtraj
 ```
 
-**Total new packages**: ~8 conda + 1–2 pip. All ARM64-native or tested under Rosetta.
-Metal plugin requires source build against OpenMM 8.1; cloud tier requires API key.
+**Total new packages**: ~7 conda + 2 pip. All ARM64-native or tested under Rosetta.
+MD cloud submission requires `RUNPOD_API_KEY` environment variable.
 
 ---
 
