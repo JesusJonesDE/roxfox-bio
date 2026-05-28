@@ -21,7 +21,8 @@ pipeline validate [OPTIONS]
 | `--gate` | str | no | None | Run single gate: admet / mmgbsa / selectivity / md |
 | `--dashboard` | flag | no | False | Print gate dashboard and exit (no new gates run) |
 | `--force` | flag | no | False | Re-run gates even if cached results exist |
-| `--md-full` | flag | no | False | With --gate md: run full 50 ns (slow) instead of 2 ns fast mode |
+| `--md-metal` | flag | no | False | With --gate md: use Metal plugin for 50 ns on M1 Max GPU (requires source-built plugin) |
+| `--md-cloud` | flag | no | False | With --gate md: dispatch 50 ns simulation to cloud GPU (requires RUNPOD_API_KEY env var) |
 | `--data-dir` | path | no | data/ | Override data directory |
 
 *Either --target or --all required.
@@ -71,8 +72,11 @@ pipeline validate --target VRK1 --dashboard
 # Force re-run selectivity gate ignoring cache
 pipeline validate --target VRK1 --scaffold SCF-009 --gate selectivity --force
 
-# Run full 50 ns MD (slow)
-pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-full
+# Run 50 ns MD via Metal plugin (local GPU, requires source-built plugin)
+pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-metal
+
+# Run 50 ns MD via cloud GPU (~$5-10, requires RUNPOD_API_KEY)
+pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-cloud
 ```
 
 ---
@@ -146,8 +150,9 @@ validate_selectivity_{scaffold_id}.md
 - Top docking pose PDBQT
 
 ### Modes
-- **Fast mode** (default): 2 ns implicit solvent (OBC/GB), ~1 hour on M1 Max CPU
-- **Full mode** (`--md-full`): 50 ns explicit solvent (TIP3P), ~2 days on M1 Max CPU
+- **Tier 1 — Fast mode** (default): 2 ns implicit solvent (OBC/GB), ~1–2 h on M1 Max CPU. No extra dependencies.
+- **Tier 2 — Metal plugin** (`--md-metal`): 50 ns explicit solvent (TIP3P), ~20–40 ns/day on M1 Max Metal GPU (1–3 days). Requires source-built `openmm-metal` plugin. Pipeline auto-detects if installed.
+- **Tier 3 — Cloud** (`--md-cloud`): 50 ns explicit solvent, dispatched to RunPod A100. Requires `RUNPOD_API_KEY` env var. Completes in < 6 h at ~$5–10/run.
 
 ### Outputs
 ```

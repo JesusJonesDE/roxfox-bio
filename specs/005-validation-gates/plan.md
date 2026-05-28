@@ -18,6 +18,8 @@ Add four computational validation gates (ADMET, MM-GBSA rescoring, selectivity d
 - `openmm`, `openmmforcefields`, `openff-toolkit` (conda-forge) — MM-GBSA + MD gates
 - `mdtraj` (conda-forge) — MD trajectory analysis
 - `pdbfixer` (conda-forge) — PDB preparation for MD
+- `openmm-metal` plugin (optional, source build from `philipturner/openmm-metal`) — MD Tier 2 (Metal GPU, ~20–40 ns/day on M1 Max)
+- `runpod` (pip, optional) — MD Tier 3 (cloud GPU dispatch)
 
 **Dependencies (existing, reused)**: `vina`, `meeko`, `rdkit`, `biopython`, `pandas`, `rich`, `httpx`, `typer`, `tenacity`
 
@@ -31,7 +33,9 @@ Add four computational validation gates (ADMET, MM-GBSA rescoring, selectivity d
 - ADMET: < 60 s per scaffold
 - MM-GBSA: < 10 min per scaffold (CPU)
 - Selectivity panel: < 2 h per scaffold (4 × Vina docking)
-- MD fast mode: < 2 h per scaffold (2 ns implicit solvent, CPU)
+- MD Tier 1 (fast, default): < 2 h per scaffold (2 ns implicit solvent, CPU)
+- MD Tier 2 (Metal plugin): 1–3 days per scaffold (50 ns explicit solvent, M1 Max GPU ~20–40 ns/day)
+- MD Tier 3 (cloud): < 6 h per scaffold (50 ns explicit solvent, A100 GPU ~$5–10/run)
 
 **Constraints**: No paid APIs. No account-required services. Offline-capable for all gates except initial structure downloads.
 
@@ -142,14 +146,33 @@ data/
 - Selectivity index = |target ΔG| / max(|off-target ΔG|); pass if SI ≥ 10
 - VRK2 AlphaFold2 model downloaded from EBI API; flagged with low-confidence warning
 
-### Gate 4 — MD
-- Tool: OpenMM (CPU platform, no Metal GPU support on Apple Silicon)
-- **Fast mode (default)**: 2 ns, implicit solvent (OBC/GB), ~1–2 h on M1 Max CPU
-- **Full mode (--md-full)**: 50 ns, explicit solvent (TIP3P), ~1–2 days on CPU
-- Forcefield: ff14SB (protein) + GAFF2 (ligand via openmmforcefields)
-- PDB preparation: pdbfixer (cap termini, add missing residues/atoms)
-- Analysis: MDTraj RMSD of ligand heavy atoms vs. starting pose
-- Pass: mean RMSD ≤ 3.0 Å over final window (1 ns fast, 25 ns full)
+### Gate 4 — MD (three-tier)
+Three tiers selected at runtime via CLI flag; pipeline auto-detects Metal plugin availability.
+
+**Tier 1 — Fast mode (default, `--gate md`)**:
+- Tool: OpenMM CPU platform (official, no build required)
+- 2 ns implicit solvent (OBC/GB), ~1–2 h on M1 Max CPU
+- Pass: mean RMSD ≤ 3.0 Å over final 1 ns
+
+**Tier 2 — Metal plugin mode (`--md-metal`)**:
+- Tool: OpenMM 8.1 + `philipturner/openmm-metal` (community, source build)
+- 50 ns explicit solvent (TIP3P), ~20–40 ns/day on M1 Max Metal GPU → 1–3 days
+- Plugin detection: `md.py` checks for Metal platform at import; enables `--md-metal` only if present
+- Risk: plugin unmaintained since Aug 2024, pinned to OpenMM 8.1; flagged in report
+- Pass: mean RMSD ≤ 3.0 Å over final 25 ns
+
+**Tier 3 — Cloud mode (`--md-cloud`)**:
+- Tool: RunPod API (via `runpod` pip package) or Lambda Labs
+- User provides `RUNPOD_API_KEY` environment variable
+- Pipeline serialises the prepared system, submits job, polls for completion, downloads RMSD CSV
+- ~$5–10 per 50 ns run on A100; completes in < 6 h
+- Pass: mean RMSD ≤ 3.0 Å over final 25 ns
+
+**Shared workflow (all tiers)**:
+PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller → energy minimise → NVT equilibration → NVT production → MDTraj RMSD analysis
+
+**Forcefield (Tier 1/2)**: ff14SB (protein) + GAFF2 (ligand via openmmforcefields)
+**Forcefield (Tier 3)**: same, prepared locally, serialised as OpenMM XML for cloud submission
 
 ### Dashboard
 - Rich Table in terminal (existing Rich dependency)
@@ -163,5 +186,7 @@ data/
 | Design choice | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | Separate `gates/` subdirectory | 4 gates × different dependencies; isolation prevents import errors if one tool not installed | Flat files would mix concerns and make optional-dependency handling harder |
-| Fast mode / full mode for MD | OpenMM CPU is 0.5–2 ns/day; 50 ns would take days | Removing MD gate entirely loses the highest-confidence filter; fast mode gives useful signal in 1–2 hours |
+| Three-tier MD (fast/Metal/cloud) | OpenMM has no official Metal backend; community plugin is unmaintained; CPU alone is 0.5–2 ns/day | Single mode forces users to choose between 1h/2ns (low confidence) or days of CPU time; tiers let each user pick the right trade-off for their situation |
+| Metal plugin as opt-in (not default) | Plugin is unmaintained since Aug 2024, pinned to OpenMM 8.1, source-build only | Making it default would break pipelines for users who haven't built it; opt-in is safer |
+| Cloud tier via RunPod | A100 GPU gives 100–800 ns/day, ~$5–10 per run; most reliable path to production-grade 50 ns | Removing cloud option would mean Metal plugin (maintenance risk) is the only path to full MD |
 | Reuse `run_dock()` for selectivity | Selectivity is exactly docking against different targets | Reimplementing docking would duplicate 200+ lines |

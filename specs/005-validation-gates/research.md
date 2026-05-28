@@ -85,34 +85,60 @@ conda create -n mmpbsa -c conda-forge gmx_mmpbsa gromacs ambertools rdkit openmm
 
 ## Gate 4 — MD Pose Stability
 
-### Decision: OpenMM CPU platform with TIP3P + ff14SB + GAFF2 — **with revised runtime expectations**
+### Decision: Three-tier MD strategy — fast local / Metal plugin / cloud GPU
 
-**Critical finding**: OpenMM has **no Metal GPU backend** on Apple Silicon. The Metal plugin is not in the official release. This means all MD runs on CPU only.
+**Thorough research findings (May 2026)**:
 
-**Revised runtime expectation on M1 Max**:
-- CPU platform: 0.5–2 ns/day (all cores)
-- 50 ns simulation: **25–100 days** — far beyond the 6-hour spec target
-- **The spec's 6-hour MD target is not achievable locally for 50 ns explicit solvent**
+| Engine | Apple Silicon GPU | Notes |
+|---|---|---|
+| OpenMM (official) | CPU only | No Metal backend in 8.x official releases |
+| OpenMM + Metal plugin | ~20–40 ns/day | Community plugin, unmaintained since Aug 2024, pinned to OpenMM 8.1, source build only |
+| GROMACS | CPU only | conda-forge osx-arm64 is CPU-only; OpenCL path deprecated |
+| NAMD, AMBER, JAX-MD | CPU only | CUDA-only GPU paths; no Apple Silicon GPU support |
+| TorchMD-NET / MACE-OFF | CPU only on M1 | No validated OpenMM-Torch MPS path; experimental only |
 
-**Revised approach**:
+**OpenMM Metal plugin details** (`philipturner/openmm-metal`):
+- Uses Apple's `cl2Metal` OpenCL-to-Metal translation layer
+- Benchmarks: ~20–40 ns/day for a 60k-atom kinase system on M1 Max
+- Last commit: August 2024 — effectively unmaintained
+- Pinned to OpenMM 8.1 (not compatible with 8.5+)
+- Must build from source; no conda binary
+- Labelled internally as "HIP" due to an OpenMM minimiser workaround
+- Risk: medium — unmaintained, but source-buildable and functional as of last report
 
-Option A — **Implicit solvent (OBC/GB) short run (10 ns)**: Run 10 ns in implicit solvent (no water box, ~25k atoms). Achieves ~5–15 ns/day on CPU. 10 ns completes in ~1–2 days. Still too slow for interactive use.
+**Cloud GPU benchmark** (for reference):
+- RunPod / Lambda Labs A100: 100–800 ns/day for 60k-atom system; ~$5–10 per 50 ns run
 
-Option B — **Cloud GPU (recommended for production MD)**: AWS p3.2xlarge (NVIDIA V100) or Lambda Labs A10 achieves 50–100 ns/day for a kinase complex. Cost: ~$5 per 50 ns run. This is the practical path for the MD gate.
+### Three-tier implementation
 
-Option C — **Reduce MD gate scope to energy minimisation + short equilibration (1–2 ns)**: Sufficient to detect grossly unstable poses. Completes in ~1 hour on CPU.
+**Tier 1 — Fast mode (default, always available)**:
+2 ns implicit solvent (OBC/GB) on CPU, ~1 hour on M1 Max. Catches grossly unstable poses. Zero dependency risk. Gate pass/fail on RMSD ≤ 3.0 Å over final 1 ns.
 
-### Decision for implementation:
-- **Local fast mode** (default): 2 ns implicit solvent, RMSD check, completes ~1 hour on CPU. Gate pass/fail based on whether the pose remains in the pocket.
-- **Full mode** (`--md-full` flag): Queue a 50 ns explicit solvent run; user is informed it will take ~2 days on CPU or can be dispatched to cloud. Results written when complete.
-- **Update spec success criterion SC-004**: Revise from "6 hours for 50 ns" to "1 hour for 2 ns local fast mode; 50 ns available via --md-full flag".
+**Tier 2 — Metal plugin mode (`--md-metal` flag)**:
+50 ns explicit solvent using the community OpenMM Metal plugin. Requires user to build plugin from source (instructions provided in quickstart). Achieves ~20–40 ns/day → 50 ns completes in 1–3 days. Gate pass/fail on RMSD ≤ 3.0 Å over final 25 ns. The pipeline detects whether the plugin is installed and enables this flag automatically if present.
+
+**Tier 3 — Cloud mode (`--md-cloud` flag)**:
+Dispatch the MD job to a cloud GPU provider (RunPod, Lambda Labs). User provides API key via environment variable (`RUNPOD_API_KEY` or `LAMBDA_API_KEY`). Submits job, polls for completion, downloads results. ~$5–10 per run, 1–6 hours for 50 ns on A100. Most reliable path to production-grade MD.
+
+**Default behaviour**: Tier 1 (fast mode) unless `--md-metal` or `--md-cloud` is specified.
 
 **Install**:
 ```bash
+# Base (all tiers)
 conda install -c conda-forge openmm openmmforcefields openff-toolkit mdtraj pdbfixer
+
+# Tier 2 — Metal plugin (source build, optional)
+git clone https://github.com/openmm/openmm && cd openmm && git checkout 8.1_branch
+git clone https://github.com/philipturner/openmm-metal
+cd openmm-metal && bash build.sh --install --quick-tests
+
+# Tier 3 — Cloud (optional)
+pip install runpod  # or equivalent SDK
 ```
 
-**Workflow**: PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller (solvate/implicit) → minimise → 2 ns NVT → MDTraj RMSD analysis.
+**Workflow**: PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller → minimise → equilibrate → NVT production → MDTraj RMSD analysis.
+
+**Updated spec success criterion SC-004**: "Fast mode (2 ns) completes in under 2 hours locally. Metal plugin mode (50 ns) completes in 1–3 days locally. Cloud mode (50 ns) completes in under 6 hours."
 
 ---
 
@@ -128,13 +154,24 @@ conda install -c conda-forge openmm openmmforcefields openff-toolkit mdtraj pdbf
 # ADMET gate
 pip install admet-ai
 
-# MM-GBSA gate + MD gate
-conda install -c conda-forge gmx_mmpbsa gromacs ambertools openmm openmmforcefields openff-toolkit mdtraj pdbfixer rdkit
+# MM-GBSA gate + MD gate (base)
+conda install -c conda-forge gmx_mmpbsa gromacs ambertools openmm openmmforcefields \
+  openff-toolkit mdtraj pdbfixer rdkit
+
+# MD gate Tier 2 — Metal plugin (optional, source build)
+# See quickstart.md for full instructions
+git clone https://github.com/openmm/openmm && cd openmm && git checkout 8.1_branch
+git clone https://github.com/philipturner/openmm-metal
+cd openmm-metal && bash build.sh --install --quick-tests
+
+# MD gate Tier 3 — Cloud (optional)
+pip install runpod
 
 # Already installed: vina, meeko, biopython, pandas, rich, httpx
 ```
 
-**Total new packages**: ~8 conda + 1 pip. All ARM64-native or tested under Rosetta.
+**Total new packages**: ~8 conda + 1–2 pip. All ARM64-native or tested under Rosetta.
+Metal plugin requires source build against OpenMM 8.1; cloud tier requires API key.
 
 ---
 
