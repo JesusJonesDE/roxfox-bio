@@ -288,8 +288,9 @@ def run_cocrystal(
     )
     smiles = str(row.iloc[0][smiles_col]) if smiles_col else "unknown"
 
-    # Identify the reference PDB from structalign cache
-    pdb_files = list((settings.cache_dir / gene_symbol).glob("*.pdb"))
+    # Identify the reference PDB from structalign cache (check structures/ subdir first)
+    pdb_dir = settings.cache_dir / gene_symbol
+    pdb_files = list((pdb_dir / "structures").glob("*.pdb")) or list(pdb_dir.glob("*.pdb"))
     pdb_id = pdb_files[0].stem.upper() if pdb_files else "6AC9"
 
     # Compute centroid from binding_site_vrk1.csv

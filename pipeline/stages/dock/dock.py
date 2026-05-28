@@ -26,22 +26,61 @@ def _check_vina_installed() -> None:
         )
 
 
+_AD_ATOM_TYPE_MAP = {
+    "C": "C", "N": "N", "O": "OA", "S": "SA", "H": "H",
+    "P": "P", "F": "F", "CL": "Cl", "BR": "Br", "I": "I",
+    "MG": "Mg", "ZN": "Zn", "FE": "Fe", "CA": "Ca",
+}
+
+
+def _pdb_to_pdbqt_receptor(pdb_path: Path, pdbqt_path: Path, chain_id: str = "A") -> None:
+    """Convert PDB → PDBQT (single chain, protein ATOM records only, zero charge).
+
+    Restricts to one chain to keep the receptor manageable for Vina.
+    """
+    from Bio.PDB import PDBParser, Select, PDBIO
+
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("receptor", str(pdb_path))
+    first_model = next(iter(structure))
+
+    # Find the chain with the most residues if specified chain not present
+    available_chains = [c.id for c in first_model]
+    target_chain = chain_id if chain_id in available_chains else available_chains[0]
+
+    lines = []
+    atom_idx = 0
+    chain = first_model[target_chain]
+    for residue in chain:
+        if residue.id[0] != " ":
+            continue  # skip HETATM / water
+        for atom in residue:
+            if atom.element == "H":
+                continue
+            atom_idx += 1
+            x, y, z = atom.get_vector()
+            element = (atom.element or atom.get_name()[:1]).upper().strip()
+            ad_type = _AD_ATOM_TYPE_MAP.get(element, "C")
+            name_raw = atom.get_name().strip()
+            name_field = f" {name_raw:<3s}" if len(name_raw) < 4 else f"{name_raw:<4s}"
+            res_name = residue.resname.ljust(3)
+            res_seq = residue.id[1]
+            lines.append(
+                f"ATOM  {atom_idx:5d} {name_field} {res_name} {target_chain}{res_seq:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00"
+                f"     0.000 {ad_type:<2s}\n"
+            )
+    pdbqt_path.write_text("".join(lines))
+
+
 def _prepare_receptor(pdb_path: Path, cache_dir: Path) -> Path:
-    """Convert PDB to PDBQT using mk_prepare_receptor.py (from meeko). Cached."""
+    """Convert PDB to PDBQT for AutoDock Vina. Cached."""
     pdbqt_path = cache_dir / f"{pdb_path.stem}_receptor.pdbqt"
     if pdbqt_path.exists():
         return pdbqt_path
 
     cache_dir.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        ["mk_prepare_receptor.py", "-i", str(pdb_path), "-o", str(pdbqt_path)],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"mk_prepare_receptor.py failed for {pdb_path}:\n{result.stderr}"
-        )
+    _pdb_to_pdbqt_receptor(pdb_path, pdbqt_path)
     return pdbqt_path
 
 
@@ -72,9 +111,14 @@ def _prepare_ligand(smiles: str, scaffold_id: str, cache_dir: Path) -> Path:
     AllChem.UFFOptimizeMolecule(mol)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
+    # meeko >= 0.5: prepare() returns list of RDKitMoleculeSetup; write via PDBQTWriterLegacy
+    from meeko import PDBQTWriterLegacy
     preparator = MoleculePreparation()
-    preparator.prepare(mol)
-    preparator.write_pdbqt_file(str(pdbqt_path))
+    setups = preparator.prepare(mol)
+    pdbqt_str, is_ok, err = PDBQTWriterLegacy.write_string(setups[0])
+    if not is_ok:
+        raise RuntimeError(f"meeko PDBQT write failed for {scaffold_id}: {err}")
+    pdbqt_path.write_text(pdbqt_str)
     return pdbqt_path
 
 
@@ -198,13 +242,15 @@ def _run_control(
 
 
 def _write_xyz_as_pdbqt(coords, path: Path) -> None:
-    """Write bare-bones PDBQT from an array of (x, y, z) heavy-atom coordinates."""
-    lines = ["MODEL 1\n"]
+    """Write bare-bones rigid PDBQT from an array of (x, y, z) heavy-atom coordinates."""
+    lines = ["ROOT\n"]
     for i, (x, y, z) in enumerate(coords, 1):
         lines.append(
-            f"HETATM{i:5d}  C   LIG A   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00     0.000 C\n"
+            f"HETATM{i:5d}  C   LIG A   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00"
+            f"     0.000 C \n"
         )
-    lines.append("ENDMDL\n")
+    lines.append("ENDROOT\n")
+    lines.append("TORSDOF 0\n")
     path.write_text("".join(lines))
 
 
@@ -263,6 +309,59 @@ def _map_contacts(
         if dists.min() <= cutoff_A:
             contacted.append(int(row["klifs_position"]))
     return contacted
+
+
+def _extract_binding_site_coords(
+    pdb_path: Path,
+    binding_site_csv: Path,
+) -> list[dict]:
+    """Extract Cα coordinates for residues listed in binding_site_vrk1.csv.
+
+    Falls back to ligand heavy-atom centroid if no residues can be matched.
+    """
+    from Bio.PDB import PDBParser
+
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("receptor", str(pdb_path))
+    bs_df = pd.read_csv(binding_site_csv)
+
+    # Build residue number → Cα coord mapping
+    ca_map: dict[int, tuple[float, float, float]] = {}
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                if residue.id[0] != " ":
+                    continue  # skip HETATM
+                res_num = residue.id[1]
+                if "CA" in residue:
+                    pos = residue["CA"].get_vector()
+                    ca_map[res_num] = (pos[0], pos[1], pos[2])
+
+    coords = []
+    for _, row in bs_df.iterrows():
+        res_id = row.get("residue.id")
+        try:
+            res_num = int(float(str(res_id).split(".")[0]))
+        except (ValueError, TypeError):
+            continue
+        if res_num in ca_map:
+            x, y, z = ca_map[res_num]
+            coords.append({"ca_x": x, "ca_y": y, "ca_z": z})
+
+    if coords:
+        return coords
+
+    # Fallback: use ANP/ligand heavy-atom centroid
+    lig_coords = []
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                if residue.resname in ("ANP", "ADP", "ATP", "AMP", "LIG"):
+                    for atom in residue:
+                        if atom.element != "H":
+                            pos = atom.get_vector()
+                            lig_coords.append({"ca_x": pos[0], "ca_y": pos[1], "ca_z": pos[2]})
+    return lig_coords
 
 
 def _write_report(
@@ -384,8 +483,9 @@ def run_dock(
         raise ValueError(f"Scaffold '{scaffold_id}' not found in compounds_filtered.csv")
     smiles = str(row.iloc[0].get("smiles") or row.iloc[0].get("canonical_smiles") or row.iloc[0].get("SMILES"))
 
-    # Resolve receptor PDB from structalign outputs
-    pdb_files = list((settings.cache_dir / gene_symbol).glob("*.pdb"))
+    # Resolve receptor PDB from structalign outputs (check structures/ subdir first)
+    pdb_dir = settings.cache_dir / gene_symbol
+    pdb_files = list((pdb_dir / "structures").glob("*.pdb")) or list(pdb_dir.glob("*.pdb"))
     if not pdb_files:
         raise FileNotFoundError(
             f"No cached PDB found for {gene_symbol}. "
@@ -409,17 +509,21 @@ def run_dock(
             f"binding_site_vrk1.csv not found. "
             f"Run `pipeline structalign --target {gene_symbol}` first."
         )
-    bs_df = pd.read_csv(binding_site_csv)
-    if not {"ca_x", "ca_y", "ca_z"}.issubset(bs_df.columns):
-        raise ValueError(
-            "binding_site_vrk1.csv missing ca_x/ca_y/ca_z columns. "
-            "Re-run structalign to regenerate."
+    console.print(f"  [dim]{gene_symbol}:[/dim] extracting binding site Cα coordinates...")
+    binding_residues = _extract_binding_site_coords(pdb_path, binding_site_csv)
+    if not binding_residues:
+        raise RuntimeError(
+            f"Could not extract binding site coordinates for {gene_symbol}. "
+            f"Check that {pdb_path} contains the expected residues."
         )
-    binding_residues = bs_df[["ca_x", "ca_y", "ca_z"]].dropna().to_dict("records")
     center, box_size = _define_box(binding_residues)
 
     console.print(f"  [dim]{gene_symbol}:[/dim] running ANP control docking...")
-    control_rmsd = _run_control(pdb_path, receptor_pdbqt, center, box_size, dock_cache_dir)
+    try:
+        control_rmsd = _run_control(pdb_path, receptor_pdbqt, center, box_size, dock_cache_dir)
+    except Exception as e:
+        console.print(f"  [dim]{gene_symbol}:[/dim] [yellow]control docking failed[/yellow]: {e}")
+        control_rmsd = float("nan")
     if control_rmsd == control_rmsd and control_rmsd > 2.0:
         console.print(
             f"  [dim]{gene_symbol}:[/dim] [yellow]WARNING[/yellow] control RMSD {control_rmsd:.2f} Å > 2.0 Å"
@@ -432,9 +536,47 @@ def run_dock(
     poses = _run_vina(receptor_pdbqt, ligand_pdbqt, center, box_size, exhaustiveness, output_pdbqt)
 
     # Map contacts to selectivity candidates
+    # Merge Cα coords (from PDB) into comparison CSV for contact mapping
     comparison_csv = results_dir / "binding_site_comparison.csv"
     comparison_df = pd.read_csv(comparison_csv) if comparison_csv.exists() else pd.DataFrame()
-    contacted = _map_contacts(output_pdbqt, comparison_csv) if comparison_csv.exists() else []
+
+    contacted: list[int] = []
+    if comparison_csv.exists() and binding_residues:
+        # Build residue number → coords map from the PDB extraction
+        bs_df = pd.read_csv(binding_site_csv)
+        coord_list = _extract_binding_site_coords(pdb_path, binding_site_csv)
+        # Attach coords to comparison via residue.id matching
+        res_ids = bs_df["residue.id"].tolist()
+        coord_map: dict[float, dict] = {}
+        for rid, coord in zip(res_ids, coord_list):
+            try:
+                coord_map[float(rid)] = coord
+            except (ValueError, TypeError):
+                pass
+
+        # Merge klifs_position → residue.id → coords into comparison_df
+        if "klifs_position" in comparison_df.columns and "residue.id" in bs_df.columns:
+            merged = comparison_df.merge(
+                bs_df[["residue.klifs_id", "residue.id"]].rename(
+                    columns={"residue.klifs_id": "klifs_position"}
+                ),
+                on="klifs_position",
+                how="left",
+            )
+            merged["ca_x"] = merged["residue.id"].map(
+                lambda r: coord_map.get(float(r) if r else None, {}).get("ca_x")  # type: ignore[arg-type]
+            )
+            merged["ca_y"] = merged["residue.id"].map(
+                lambda r: coord_map.get(float(r) if r else None, {}).get("ca_y")  # type: ignore[arg-type]
+            )
+            merged["ca_z"] = merged["residue.id"].map(
+                lambda r: coord_map.get(float(r) if r else None, {}).get("ca_z")  # type: ignore[arg-type]
+            )
+            tmp_csv = results_dir / "_tmp_comparison_coords.csv"
+            merged.to_csv(tmp_csv, index=False)
+            contacted = _map_contacts(output_pdbqt, tmp_csv)
+            tmp_csv.unlink(missing_ok=True)
+            comparison_df = merged
 
     # Save cache
     cache.save(gene_symbol, cache_key, poses, len(poses))

@@ -44,14 +44,19 @@ def _get_manifest() -> dict[str, str]:
             return result
     except Exception:
         pass
-    # CSV fallback
+    # CSV fallback (manifest is a CSV: release, release_date, filename, url, md5_hash)
     df = pd.read_csv(io.StringIO(r.text))
     col_lower = {c.lower().replace(" ", "_"): c for c in df.columns}
     name_col = next((col_lower[k] for k in col_lower if "file_name" in k or "filename" in k),
                     next((col_lower[k] for k in col_lower if "name" in k), None))
     url_col = next((col_lower[k] for k in col_lower if "url" in k or "link" in k), None)
     if name_col and url_col:
-        return {str(k): str(v) for k, v in zip(df[name_col], df[url_col]) if pd.notna(v)}
+        # Use setdefault so first occurrence (latest release) wins for duplicate filenames
+        result: dict[str, str] = {}
+        for name, url in zip(df[name_col], df[url_col]):
+            if pd.notna(name) and pd.notna(url):
+                result.setdefault(str(name), str(url))
+        return result
     raise ValueError("Cannot parse DepMap manifest")
 
 
@@ -74,13 +79,33 @@ def _download_mutations(manifest: dict[str, str], cache_dir: Path) -> pd.DataFra
             f"Available (first 10): {available}"
         )
 
-    df = pd.read_csv(url, usecols=["ModelID", "Hugo_Symbol", "Variant_Classification",
-                                    "isDeleterious"])
-    # Keep non-silent, deleterious mutations
-    df = df[
-        (df["Variant_Classification"] != "Silent") &
-        (df["isDeleterious"] == True)  # noqa: E712
-    ].copy()
+    # Peek at headers to handle old (24Q4-) vs new (26Q1+) schema
+    header_df = pd.read_csv(url, nrows=0)
+    cols = set(header_df.columns)
+
+    # New schema (26Q1+): HugoSymbol, MolecularConsequence, LikelyLoF
+    # Old schema (-24Q4): Hugo_Symbol, Variant_Classification, isDeleterious
+    if "HugoSymbol" in cols:
+        df = pd.read_csv(url, usecols=["ModelID", "HugoSymbol", "MolecularConsequence",
+                                        "LikelyLoF"])
+        df = df.rename(columns={
+            "HugoSymbol": "Hugo_Symbol",
+            "MolecularConsequence": "Variant_Classification",
+            "LikelyLoF": "isDeleterious",
+        })
+        # MolecularConsequence "synonymous_variant" ≈ old "Silent"
+        df = df[
+            (df["Variant_Classification"] != "synonymous_variant") &
+            (df["isDeleterious"] == True)  # noqa: E712
+        ].copy()
+    else:
+        df = pd.read_csv(url, usecols=["ModelID", "Hugo_Symbol", "Variant_Classification",
+                                        "isDeleterious"])
+        df = df[
+            (df["Variant_Classification"] != "Silent") &
+            (df["isDeleterious"] == True)  # noqa: E712
+        ].copy()
+
     # One row per (ModelID, Hugo_Symbol) — any deleterious mutation in gene counts
     df = df.drop_duplicates(subset=["ModelID", "Hugo_Symbol"])
 
