@@ -12,28 +12,25 @@ from pipeline.stages.validate.validate import (
 
 # ── Thresholds ─────────────────────────────────────────────────────────────────
 
-_THRESHOLDS = {
-    "BBB_Martini": (">", 0.5),
-    "CYP1A2_Inhibitor": ("<", 0.3),
-    "CYP2D6_Inhibitor": ("<", 0.3),
-    "CYP3A4_Inhibitor": ("<", 0.3),
-    "Solubility": (">", -4.0),   # logS; field may also appear as ESOL_logS or LogS
-    "HIA_Hou": (">", 0.3),
+# Field names as returned by admet-ai >= 1.0 (TDC benchmark naming)
+_FIELD_MAP = {
+    "BBB": "BBB_Martins",
+    "CYP1A2": "CYP1A2_Veith",
+    "CYP2D6": "CYP2D6_Veith",
+    "CYP3A4": "CYP3A4_Veith",
+    "Solubility": "Solubility_AqSolDB",
+    "HIA": "HIA_Hou",
+    "Bioavailability": "Bioavailability_Ma",
 }
 
-# Candidate field names for solubility (tried in order)
-_SOLUBILITY_FIELDS = ("Solubility", "ESOL_logS", "LogS")
-
-
-def _extract_solubility(preds: dict) -> tuple[str, float]:
-    """Return (canonical_key, value) for the first solubility field found in preds."""
-    for candidate in _SOLUBILITY_FIELDS:
-        if candidate in preds:
-            return "Solubility", float(preds[candidate])
-    raise KeyError(
-        f"No solubility field found in ADMET-AI predictions. "
-        f"Tried: {_SOLUBILITY_FIELDS}. Available keys: {list(preds.keys())}"
-    )
+_THRESHOLDS = {
+    "BBB_Martins":         (">",  0.5),   # BBB penetration probability
+    "CYP1A2_Veith":        ("<",  0.3),   # CYP1A2 inhibition probability
+    "CYP2D6_Veith":        ("<",  0.3),   # CYP2D6 inhibition probability
+    "CYP3A4_Veith":        ("<",  0.3),   # CYP3A4 inhibition probability
+    "Solubility_AqSolDB":  (">", -4.0),   # logS (> -4 ≈ > 10 µg/mL at MW ~400)
+    "HIA_Hou":             (">",  0.3),   # Human intestinal absorption
+}
 
 
 def _check_threshold(value: float, operator: str, threshold: float) -> bool:
@@ -93,17 +90,15 @@ def run_admet_gate(
     else:
         preds = raw_preds
 
-    # 4. Extract scores
-    solubility_key, solubility_val = _extract_solubility(preds)
+    # 4. Extract scores — check all threshold fields are present
+    missing = [f for f in _THRESHOLDS if f not in preds]
+    if missing:
+        raise RuntimeError(
+            f"ADMET-AI returned unexpected fields. Missing: {missing}. "
+            f"Available: {sorted(preds.keys())[:15]}..."
+        )
 
-    scores: dict[str, float] = {
-        "BBB_Martini": float(preds["BBB_Martini"]),
-        "CYP1A2_Inhibitor": float(preds["CYP1A2_Inhibitor"]),
-        "CYP2D6_Inhibitor": float(preds["CYP2D6_Inhibitor"]),
-        "CYP3A4_Inhibitor": float(preds["CYP3A4_Inhibitor"]),
-        "Solubility": solubility_val,
-        "HIA_Hou": float(preds["HIA_Hou"]),
-    }
+    scores: dict[str, float] = {field: float(preds[field]) for field in _THRESHOLDS}
 
     # 5. Apply thresholds
     failures: list[str] = []
@@ -123,7 +118,7 @@ def run_admet_gate(
     result = GateResult(
         gate_name="admet",
         status=status,
-        score=scores["BBB_Martini"],
+        score=scores["BBB_Martins"],
         reason=reason,
         details=scores,
     )
