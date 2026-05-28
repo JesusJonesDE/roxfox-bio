@@ -485,12 +485,65 @@ def biomarker(
 
 # ── dock ───────────────────────────────────────────────────────────────────────
 
+def _resolve_scaffolds(
+    scaffold: Optional[str],
+    all_scaffolds: bool,
+    gene: str,
+    settings: "Settings",
+    top_n: Optional[int] = None,
+) -> list[str]:
+    """Return deduplicated scaffold ID list for a target.
+
+    With --all-scaffolds: deduplicate by scaffold_id, keep only Ro5-passing +
+    non-flagged (selectivity_flag==False), sort by best_value_nm descending
+    (higher thermal shift first), then apply --top-n if set.
+    """
+    import pandas as _pd
+
+    if scaffold:
+        return [scaffold]
+
+    results_dir = settings.results_dir / gene
+    compounds_csv = results_dir / "compounds_filtered.csv"
+    if not compounds_csv.exists():
+        raise FileNotFoundError(f"compounds_filtered.csv not found for {gene}")
+
+    df = _pd.read_csv(compounds_csv)
+
+    # Deduplicate: one row per scaffold, keep the best (highest best_value_nm)
+    id_col = next(
+        (c for c in ("scaffold_id", "compound_id", "molecule_chembl_id") if c in df.columns),
+        None,
+    )
+    if id_col is None:
+        return []
+
+    df = df.dropna(subset=[id_col])
+
+    # Filter: Ro5-passing and not flagged for selectivity problems
+    if "passes_ro5" in df.columns:
+        df = df[df["passes_ro5"] == True]  # noqa: E712
+    if "selectivity_flag" in df.columns:
+        df = df[df["selectivity_flag"] == False]  # noqa: E712
+
+    # One row per scaffold: keep highest thermal shift / best potency value
+    if "best_value_nm" in df.columns:
+        df = df.sort_values("best_value_nm", ascending=False)
+    df = df.drop_duplicates(subset=[id_col])
+
+    scaffolds = df[id_col].tolist()
+    if top_n is not None:
+        scaffolds = scaffolds[:top_n]
+    return scaffolds
+
+
 @app.command()
 def dock(
     target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
     all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
     scaffold: Optional[str] = typer.Option(None, "--scaffold", help="Scaffold ID from compound library (e.g. SCF-013)"),
-    all_scaffolds: bool = typer.Option(False, "--all-scaffolds", help="Dock all scaffolds in compound library"),
+    all_scaffolds: bool = typer.Option(False, "--all-scaffolds", help="Dock all Ro5-passing, non-flagged scaffolds"),
+    top_n: Optional[int] = typer.Option(None, "--top-n", help="With --all-scaffolds: dock only the top N scaffolds by potency"),
     force: bool = typer.Option(False, "--force", help="Re-run even if cached output exists"),
     exhaustiveness: int = typer.Option(32, "--exhaustiveness", help="Vina exhaustiveness parameter"),
     data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
@@ -510,25 +563,15 @@ def dock(
     exit_code = 0
     for gene in targets:
         console.rule(f"[bold cyan]{gene}[/bold cyan] — dock")
-        # Resolve scaffold list
-        scaffolds_to_run: list[str] = []
-        if scaffold:
-            scaffolds_to_run = [scaffold]
-        elif all_scaffolds:
-            import pandas as _pd
-            results_dir = settings.results_dir / gene
-            compounds_csv = results_dir / "compounds_filtered.csv"
-            if compounds_csv.exists():
-                df = _pd.read_csv(compounds_csv)
-                id_col = next(
-                    (c for c in ("scaffold_id", "compound_id", "molecule_chembl_id") if c in df.columns),
-                    None,
-                )
-                scaffolds_to_run = df[id_col].dropna().tolist() if id_col else []
-            else:
-                console.print(f"  [red]compounds_filtered.csv not found for {gene}[/red]")
-                exit_code = 1
-                continue
+        try:
+            scaffolds_to_run = _resolve_scaffolds(scaffold, all_scaffolds, gene, settings, top_n)
+        except FileNotFoundError as exc:
+            console.print(f"  [red]{exc}[/red]")
+            exit_code = 1
+            continue
+
+        if all_scaffolds:
+            console.print(f"  [dim]{gene}:[/dim] {len(scaffolds_to_run)} scaffolds queued")
 
         for scf in scaffolds_to_run:
             try:
@@ -549,7 +592,9 @@ def dock(
 def cocrystal(
     target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
     all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
-    scaffold: str = typer.Option(..., "--scaffold", help="Scaffold ID (e.g. SCF-013)"),
+    scaffold: Optional[str] = typer.Option(None, "--scaffold", help="Scaffold ID (e.g. SCF-013)"),
+    all_scaffolds: bool = typer.Option(False, "--all-scaffolds", help="Generate briefs for all Ro5-passing scaffolds"),
+    top_n: Optional[int] = typer.Option(None, "--top-n", help="With --all-scaffolds: generate only top N by potency"),
     force: bool = typer.Option(False, "--force", help="Re-generate even if brief already exists"),
     data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
 ):
@@ -561,13 +606,51 @@ def cocrystal(
     cache = CacheManager(settings)
     targets = _resolve_targets(target, all_targets)
 
+    if not scaffold and not all_scaffolds:
+        console.print("[red]Specify --scaffold <ID> or --all-scaffolds[/red]")
+        raise typer.Exit(1)
+
     exit_code = 0
     for gene in targets:
         console.rule(f"[bold cyan]{gene}[/bold cyan] — cocrystal")
         try:
-            run_cocrystal(gene, scaffold, settings, cache, force, console)
+            scaffolds_to_run = _resolve_scaffolds(scaffold, all_scaffolds, gene, settings, top_n)
+        except FileNotFoundError as exc:
+            console.print(f"  [red]{exc}[/red]")
+            exit_code = 1
+            continue
+
+        for scf in scaffolds_to_run:
+            try:
+                run_cocrystal(gene, scf, settings, cache, force, console)
+            except Exception as exc:
+                console.print(f"  [red]{gene} cocrystal {scf} FAIL: {exc}[/red]")
+                exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
+# ── rank ───────────────────────────────────────────────────────────────────────
+
+@app.command()
+def rank(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Rank scaffolds for all configured targets"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Rank all docked scaffolds by affinity and produce a cross-scaffold summary table."""
+    from pipeline.stages.rank.rank import run_rank
+
+    settings = _make_settings(data_dir, 30)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — rank")
+        try:
+            run_rank(gene, settings, console)
         except Exception as exc:
-            console.print(f"  [red]{gene} cocrystal FAIL: {exc}[/red]")
+            console.print(f"  [red]{gene} rank FAIL: {exc}[/red]")
             exit_code = 1
 
     raise typer.Exit(exit_code)

@@ -104,6 +104,11 @@ def _prepare_ligand(smiles: str, scaffold_id: str, cache_dir: Path) -> Path:
     if mol is None:
         raise ValueError(f"Cannot parse SMILES for {scaffold_id}: {smiles!r}")
 
+    # Strip salts/counterions — keep only the largest fragment
+    frags = Chem.GetMolFrags(mol, asMols=True)
+    if len(frags) > 1:
+        mol = max(frags, key=lambda m: m.GetNumHeavyAtoms())
+
     mol = Chem.AddHs(mol)
     result = AllChem.EmbedMolecule(mol, AllChem.ETKDGv3())
     if result == -1:
@@ -122,29 +127,48 @@ def _prepare_ligand(smiles: str, scaffold_id: str, cache_dir: Path) -> Path:
     return pdbqt_path
 
 
-def _define_box(
-    binding_site_residues: list[dict],
-    margin_A: float = 3.0,
-) -> tuple[list[float], list[float]]:
-    """Compute docking box centroid and size from Cα coordinates.
+_ATP_POCKET_BOX_A = 22.0  # fixed box side for ATP-competitive docking
 
-    Returns (center_xyz, box_size_xyz) where box_size is 2*(r+margin) on each axis.
+
+def _extract_ligand_centroid(pdb_path: Path, chain_id: str = "A") -> list[float] | None:
+    """Return heavy-atom centroid of ANP/ADP/ATP/AMP from chain_id only.
+
+    Uses the same chain as the receptor PDBQT so the box is correctly aligned.
+    Returns None if no nucleotide ligand is found in that chain.
     """
-    xs = [r["ca_x"] for r in binding_site_residues]
-    ys = [r["ca_y"] for r in binding_site_residues]
-    zs = [r["ca_z"] for r in binding_site_residues]
+    from Bio.PDB import PDBParser
 
-    cx = sum(xs) / len(xs)
-    cy = sum(ys) / len(ys)
-    cz = sum(zs) / len(zs)
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("rec", str(pdb_path))
+    coords = []
+    for model in structure:
+        available = [c.id for c in model]
+        target = chain_id if chain_id in available else available[0]
+        chain = model[target]
+        for residue in chain:
+            if residue.resname in ("ANP", "ADP", "ATP", "AMP", "ACP"):
+                for atom in residue:
+                    if atom.element != "H":
+                        pos = atom.get_vector()
+                        coords.append([pos[0], pos[1], pos[2]])
+        break  # first model only
+    if not coords:
+        return None
+    cx = sum(c[0] for c in coords) / len(coords)
+    cy = sum(c[1] for c in coords) / len(coords)
+    cz = sum(c[2] for c in coords) / len(coords)
+    return [cx, cy, cz]
 
-    # Max radius from centroid
-    r = max(
-        ((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2) ** 0.5
-        for x, y, z in zip(xs, ys, zs)
-    )
-    side = 2 * (r + margin_A)
-    return [cx, cy, cz], [side, side, side]
+
+def _define_box(
+    center: list[float],
+    box_side_A: float = _ATP_POCKET_BOX_A,
+) -> tuple[list[float], list[float]]:
+    """Return (center, box_size) for a cubic docking box.
+
+    center is pre-computed (ligand centroid preferred over Cα centroid).
+    """
+    return center, [box_side_A, box_side_A, box_side_A]
 
 
 def _run_vina(
@@ -502,21 +526,32 @@ def run_dock(
     console.print(f"  [dim]{gene_symbol}:[/dim] preparing ligand {scaffold_id}...")
     ligand_pdbqt = _prepare_ligand(smiles, scaffold_id, dock_cache_dir)
 
-    # Load binding site residues for box definition
+    # Box centre: ANP/ATP ligand centroid is most accurate; fall back to Cα centroid
     binding_site_csv = results_dir / "binding_site_vrk1.csv"
-    if not binding_site_csv.exists():
-        raise FileNotFoundError(
-            f"binding_site_vrk1.csv not found. "
-            f"Run `pipeline structalign --target {gene_symbol}` first."
+    console.print(f"  [dim]{gene_symbol}:[/dim] defining docking box...")
+    center = _extract_ligand_centroid(pdb_path)
+    if center is not None:
+        console.print(
+            f"  [dim]{gene_symbol}:[/dim] box centre from co-crystal ligand "
+            f"({center[0]:.1f}, {center[1]:.1f}, {center[2]:.1f}) "
+            f"— {_ATP_POCKET_BOX_A:.0f} Å cube"
         )
-    console.print(f"  [dim]{gene_symbol}:[/dim] extracting binding site Cα coordinates...")
-    binding_residues = _extract_binding_site_coords(pdb_path, binding_site_csv)
-    if not binding_residues:
-        raise RuntimeError(
-            f"Could not extract binding site coordinates for {gene_symbol}. "
-            f"Check that {pdb_path} contains the expected residues."
+    else:
+        binding_residues = _extract_binding_site_coords(pdb_path, binding_site_csv)
+        if not binding_residues:
+            raise RuntimeError(
+                f"Could not extract binding site coordinates for {gene_symbol}. "
+                f"Check that {pdb_path} contains the expected residues."
+            )
+        xs = [r["ca_x"] for r in binding_residues]
+        ys = [r["ca_y"] for r in binding_residues]
+        zs = [r["ca_z"] for r in binding_residues]
+        center = [sum(xs) / len(xs), sum(ys) / len(ys), sum(zs) / len(zs)]
+        console.print(
+            f"  [dim]{gene_symbol}:[/dim] [yellow]no co-crystal ligand found — "
+            f"using Cα centroid fallback[/yellow]"
         )
-    center, box_size = _define_box(binding_residues)
+    center, box_size = _define_box(center)
 
     console.print(f"  [dim]{gene_symbol}:[/dim] running ANP control docking...")
     try:
@@ -541,6 +576,7 @@ def run_dock(
     comparison_df = pd.read_csv(comparison_csv) if comparison_csv.exists() else pd.DataFrame()
 
     contacted: list[int] = []
+    binding_residues = _extract_binding_site_coords(pdb_path, binding_site_csv) if binding_site_csv.exists() else []
     if comparison_csv.exists() and binding_residues:
         # Build residue number → coords map from the PDB extraction
         bs_df = pd.read_csv(binding_site_csv)
