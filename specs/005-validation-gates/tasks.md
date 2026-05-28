@@ -10,14 +10,14 @@
 
 **Purpose**: Install new dependencies and create the validate stage skeleton that all gates share.
 
-- [ ] T001 Install admet-ai: `pip install admet-ai` and verify import in pipeline env
-- [ ] T002 Install gmx_mmpbsa + gromacs + ambertools: `conda install -c conda-forge gmx_mmpbsa gromacs ambertools` and verify `gmx_MMPBSA --version`
-- [ ] T003 [P] Install openmm + openmmforcefields + openff-toolkit + pdbfixer: `conda install -c conda-forge openmm openmmforcefields openff-toolkit pdbfixer` and verify imports
-- [ ] T004 [P] Install runpod: `pip install runpod` and verify import
-- [ ] T005 Create `pipeline/stages/validate/__init__.py` (empty)
-- [ ] T006 Create `pipeline/stages/validate/gates/__init__.py` (empty)
-- [ ] T007 Add `GateStatus` enum and `GateResult` dataclass to `pipeline/models.py` per data-model.md (fields: gate_name, status, score, reason, details, report_path, duration_s, timestamp)
-- [ ] T008 Add `ValidationResult` dataclass to `pipeline/models.py` (fields: gene_symbol, scaffold_id, smiles, gates, overall_pass, handoff_ready, created_at)
+- [X] T001 Install admet-ai: `pip install admet-ai` and verify import in pipeline env
+- [X] T002 Install gmx_mmpbsa + gromacs + ambertools: `conda install -c conda-forge gmx_mmpbsa gromacs ambertools` and verify `gmx_MMPBSA --version`
+- [X] T003 [P] Install openmm + openmmforcefields + openff-toolkit + pdbfixer: `conda install -c conda-forge openmm openmmforcefields openff-toolkit pdbfixer` and verify imports
+- [X] T004 [P] Install runpod: `pip install runpod` and verify import
+- [X] T005 Create `pipeline/stages/validate/__init__.py` (empty)
+- [X] T006 Create `pipeline/stages/validate/gates/__init__.py` (empty)
+- [X] T007 Add `GateStatus` enum and `GateResult` dataclass to `pipeline/models.py` per data-model.md (fields: gate_name, status, score, reason, details, report_path, duration_s, timestamp)
+- [X] T008 Add `ValidationResult` dataclass to `pipeline/models.py` (fields: gene_symbol, scaffold_id, smiles, gates, overall_pass, handoff_ready, created_at)
 
 **Checkpoint**: Dependencies installed, dataclasses defined — gate implementations can begin
 
@@ -27,11 +27,11 @@
 
 **Purpose**: Shared utilities needed by all four gate modules before any gate can be implemented.
 
-- [ ] T009 Implement SMILES salt-stripping helper in `pipeline/stages/validate/validate.py`: strips counterions from multi-fragment SMILES using RDKit, returns largest fragment
-- [ ] T010 Implement `_load_smiles(gene_symbol, scaffold_id, settings)` in `pipeline/stages/validate/validate.py`: reads SMILES from `compounds_filtered.csv`, applies salt stripping
-- [ ] T011 Implement `_load_docking_pdbqt(gene_symbol, scaffold_id, settings)` in `pipeline/stages/validate/validate.py`: locates `docking_poses_{scaffold}.pdbqt`, raises clear error if not found (directs user to `pipeline dock`)
-- [ ] T012 Implement `_cache_gate_result(gene_symbol, scaffold_id, gate_name, result, cache)` and `_load_cached_gate_result(...)` in `pipeline/stages/validate/validate.py` using existing CacheManager with key `validate_{gate_name}_{scaffold_id}`
-- [ ] T013 Implement `_write_gate_report(gene_symbol, scaffold_id, gate_name, result, settings)` in `pipeline/stages/validate/validate.py`: writes markdown report to `data/results/{gene}/validate_{gate}_{scaffold}.md`
+- [X] T009 Implement SMILES salt-stripping helper in `pipeline/stages/validate/validate.py`: strips counterions from multi-fragment SMILES using RDKit, returns largest fragment
+- [X] T010 Implement `_load_smiles(gene_symbol, scaffold_id, settings)` in `pipeline/stages/validate/validate.py`: reads SMILES from `compounds_filtered.csv`, applies salt stripping
+- [X] T011 Implement `_load_docking_pdbqt(gene_symbol, scaffold_id, settings)` in `pipeline/stages/validate/validate.py`: locates `docking_poses_{scaffold}.pdbqt`, raises clear error if not found (directs user to `pipeline dock`)
+- [X] T012 Implement `_cache_gate_result(gene_symbol, scaffold_id, gate_name, result, cache)` and `_load_cached_gate_result(...)` in `pipeline/stages/validate/validate.py` using existing CacheManager with key `validate_{gate_name}_{scaffold_id}`
+- [X] T013 Implement `_write_gate_report(gene_symbol, scaffold_id, gate_name, result, settings)` in `pipeline/stages/validate/validate.py`: writes markdown report to `data/results/{gene}/validate_{gate}_{scaffold}.md`
 
 **Checkpoint**: Shared utilities complete — all four gate modules can now be implemented independently
 
@@ -45,7 +45,7 @@
 
 ### Implementation
 
-- [ ] T014 [US1] Implement `pipeline/stages/validate/gates/admet.py`: `run_admet_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult`
+- [X] T014 [US1] Implement `pipeline/stages/validate/gates/admet.py`: `run_admet_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult`
   - Import `admet_ai.ADMETModel`, instantiate model
   - Call `_load_smiles()` to get SMILES
   - Run `model.predict(smiles=smiles)` → dict of scores
@@ -53,8 +53,8 @@
   - Build `GateResult` with status, score (BBB score as primary), reason listing failing properties, details dict
   - Call `_cache_gate_result()` and `_write_gate_report()`
   - Return `GateResult`
-- [ ] T015 [US1] Write ADMET gate markdown report template in `_write_gate_report()`: table of all 6 properties with score, threshold, and PASS/FAIL per property; overall gate decision header
-- [ ] T016 [US1] Add unit tests in `tests/unit/test_validate_admet.py`: test pass case (all thresholds met), fail case (BBB fails), salt SMILES handling, cache hit returns same result
+- [X] T015 [US1] Write ADMET gate markdown report template in `_write_gate_report()`: table of all 6 properties with score, threshold, and PASS/FAIL per property; overall gate decision header
+- [X] T016 [US1] Add unit tests in `tests/unit/test_validate_admet.py`: test pass case (all thresholds met), fail case (BBB fails), salt SMILES handling, cache hit returns same result
 
 **Checkpoint**: `pipeline validate --gate admet` works end-to-end on SCF-009, report written
 
@@ -68,16 +68,16 @@
 
 ### Implementation
 
-- [ ] T017 [US2] Implement `_pdbqt_to_pdb(pdbqt_path, out_pdb_path)` helper in `pipeline/stages/validate/gates/mmgbsa.py`: converts top-pose PDBQT to PDB using RDKit/meeko for gmx_MMPBSA input
-- [ ] T018 [US2] Implement `_run_gmx_mmpbsa(receptor_pdb, ligand_pdb, work_dir)` in `pipeline/stages/validate/gates/mmgbsa.py`: prepares topology (GAFF2 + ff19SB), runs `gmx_MMPBSA` subprocess, parses FINAL_RESULTS_MMGBSA.dat for ΔG_bind value; raises RuntimeError (→ ERROR status) on convergence failure
-- [ ] T019 [US2] Implement `run_mmgbsa_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult` in `pipeline/stages/validate/gates/mmgbsa.py`
+- [X] T017 [US2] Implement `_pdbqt_to_pdb(pdbqt_path, out_pdb_path)` helper in `pipeline/stages/validate/gates/mmgbsa.py`: converts top-pose PDBQT to PDB using RDKit/meeko for gmx_MMPBSA input
+- [X] T018 [US2] Implement `_run_gmx_mmpbsa(receptor_pdb, ligand_pdb, work_dir)` in `pipeline/stages/validate/gates/mmgbsa.py`: prepares topology (GAFF2 + ff19SB), runs `gmx_MMPBSA` subprocess, parses FINAL_RESULTS_MMGBSA.dat for ΔG_bind value; raises RuntimeError (→ ERROR status) on convergence failure
+- [X] T019 [US2] Implement `run_mmgbsa_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult` in `pipeline/stages/validate/gates/mmgbsa.py`
   - Check docking PDBQT exists (via `_load_docking_pdbqt()`); error if not
   - Create temp work dir under `data/cache/{gene}/mmgbsa_{scaffold}/`
   - Call `_pdbqt_to_pdb()` and `_run_gmx_mmpbsa()`
   - Build GateResult: status PASS if ΔG ≤ −7.0, FAIL otherwise, ERROR on exception
   - Cache and write report
-- [ ] T020 [US2] Write MM-GBSA report: ΔG value, threshold, PASS/FAIL, energy components (if available), note on forcefield used
-- [ ] T021 [US2] Add unit tests in `tests/unit/test_validate_mmgbsa.py`: test GateResult construction for pass/fail/error cases; mock subprocess call
+- [X] T020 [US2] Write MM-GBSA report: ΔG value, threshold, PASS/FAIL, energy components (if available), note on forcefield used
+- [X] T021 [US2] Add unit tests in `tests/unit/test_validate_mmgbsa.py`: test GateResult construction for pass/fail/error cases; mock subprocess call
 
 **Checkpoint**: `pipeline validate --gate mmgbsa` works on SCF-009, ΔG returned
 
@@ -91,18 +91,18 @@
 
 ### Implementation
 
-- [ ] T022 [US3] Define `SELECTIVITY_PANEL` constant in `pipeline/stages/validate/gates/selectivity.py`: list of `OffTargetEntry` dataclasses for VRK2 (AF2, O95551), EGFR (1M17, AQ4, A), CDK2 (1E9H, ATP, A), PLK1 (2OKR, ADP, A)
-- [ ] T023 [US3] Implement `_fetch_offtarget_structure(entry, panel_dir)` in `pipeline/stages/validate/gates/selectivity.py`: downloads PDB from RCSB or AF2 from EBI if not cached in `data/cache/shared/selectivity_panel/`; adds warning flag for AF2 entries
-- [ ] T024 [US3] Implement `_dock_offtarget(smiles, scaffold_id, entry, panel_dir, settings)` in `pipeline/stages/validate/gates/selectivity.py`: reuses `_prepare_receptor()`, `_prepare_ligand()`, `_extract_ligand_centroid()`, `_define_box()`, `_run_vina()` from `pipeline/stages/dock/dock.py`; returns top pose affinity
-- [ ] T025 [US3] Implement `run_selectivity_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult` in `pipeline/stages/validate/gates/selectivity.py`
+- [X] T022 [US3] Define `SELECTIVITY_PANEL` constant in `pipeline/stages/validate/gates/selectivity.py`: list of `OffTargetEntry` dataclasses for VRK2 (AF2, O95551), EGFR (1M17, AQ4, A), CDK2 (1E9H, ATP, A), PLK1 (2OKR, ADP, A)
+- [X] T023 [US3] Implement `_fetch_offtarget_structure(entry, panel_dir)` in `pipeline/stages/validate/gates/selectivity.py`: downloads PDB from RCSB or AF2 from EBI if not cached in `data/cache/shared/selectivity_panel/`; adds warning flag for AF2 entries
+- [X] T024 [US3] Implement `_dock_offtarget(smiles, scaffold_id, entry, panel_dir, settings)` in `pipeline/stages/validate/gates/selectivity.py`: reuses `_prepare_receptor()`, `_prepare_ligand()`, `_extract_ligand_centroid()`, `_define_box()`, `_run_vina()` from `pipeline/stages/dock/dock.py`; returns top pose affinity
+- [X] T025 [US3] Implement `run_selectivity_gate(gene_symbol, scaffold_id, settings, cache, force, console) -> GateResult` in `pipeline/stages/validate/gates/selectivity.py`
   - Skip off-targets that match the primary target (e.g. exclude EGFR panel entry when target is EGFR)
   - Fetch structures for all panel entries
   - Dock scaffold into each off-target (sequentially; each ~20–30 min)
   - Compute SI = |primary_dg| / max(|offtarget_dg|)
   - Build GateResult: PASS if SI ≥ 10, FAIL otherwise; details dict includes per-off-target affinity and SI
   - Cache and write report
-- [ ] T026 [US3] Write selectivity report: table of off-target affinities vs. primary target, SI calculation, PASS/FAIL, AF2 warning if VRK2 used
-- [ ] T027 [US3] Add unit tests in `tests/unit/test_validate_selectivity.py`: SI calculation logic, primary-target exclusion logic, GateResult for pass/fail cases
+- [X] T026 [US3] Write selectivity report: table of off-target affinities vs. primary target, SI calculation, PASS/FAIL, AF2 warning if VRK2 used
+- [X] T027 [US3] Add unit tests in `tests/unit/test_validate_selectivity.py`: SI calculation logic, primary-target exclusion logic, GateResult for pass/fail cases
 
 **Checkpoint**: `pipeline validate --gate selectivity` works on SCF-009, SI value and selectivity table produced
 
@@ -116,7 +116,7 @@
 
 ### Implementation
 
-- [ ] T028 [US4] Implement `_prepare_md_system(receptor_pdb, ligand_pdbqt, work_dir)` in `pipeline/stages/validate/gates/md.py`
+- [X] T028 [US4] Implement `_prepare_md_system(receptor_pdb, ligand_pdbqt, work_dir)` in `pipeline/stages/validate/gates/md.py`
   - PDB → PDBFixer (cap termini, add missing residues/atoms, add hydrogens)
   - PDBQT → PDB (using RDKit), parametrise with GAFF2 via `openff-toolkit`
   - OpenMM Modeller: combine protein + ligand, solvate TIP3P 10 Å shell
@@ -124,11 +124,11 @@
   - Energy minimise (500 steps max)
   - Serialise system to OpenMM XML: `system.xml`, `topology.pdb`
   - Return dict with paths to XML files and atom count
-- [ ] T029 [US4] Implement `_estimate_runpod_cost(atom_count, duration_ns)` in `pipeline/stages/validate/gates/md.py`: estimates cost from community A100 rate (~$1.20/hr) × estimated wall time (atom_count / 500000 ns/day × duration_ns); returns float USD
-- [ ] T030 [US4] Implement `_submit_runpod_job(system_files, md_config, api_key)` in `pipeline/stages/validate/gates/md.py`: uses `runpod` SDK to submit serverless job with system XML, 20 ns config, 90-minute timeout; returns job_id
-- [ ] T031 [US4] Implement `_poll_runpod_job(job_id, api_key, poll_interval_s=60)` in `pipeline/stages/validate/gates/md.py`: polls job status until COMPLETED/FAILED/TIMEOUT; downloads RMSD CSV and trajectory summary on completion
-- [ ] T032 [US4] Implement `_compute_rmsd_pass(rmsd_csv_path)` in `pipeline/stages/validate/gates/md.py`: reads RMSD CSV (time_ns, rmsd_A columns), computes mean RMSD over final 10 ns; returns (mean_rmsd, pass_bool); handles timeout case where < 15 ns available → ERROR
-- [ ] T033 [US4] Implement `run_md_gate(gene_symbol, scaffold_id, settings, cache, force, console, md_max_cost) -> GateResult` in `pipeline/stages/validate/gates/md.py`
+- [X] T029 [US4] Implement `_estimate_runpod_cost(atom_count, duration_ns)` in `pipeline/stages/validate/gates/md.py`: estimates cost from community A100 rate (~$1.20/hr) × estimated wall time (atom_count / 500000 ns/day × duration_ns); returns float USD
+- [X] T030 [US4] Implement `_submit_runpod_job(system_files, md_config, api_key)` in `pipeline/stages/validate/gates/md.py`: uses `runpod` SDK to submit serverless job with system XML, 20 ns config, 90-minute timeout; returns job_id
+- [X] T031 [US4] Implement `_poll_runpod_job(job_id, api_key, poll_interval_s=60)` in `pipeline/stages/validate/gates/md.py`: polls job status until COMPLETED/FAILED/TIMEOUT; downloads RMSD CSV and trajectory summary on completion
+- [X] T032 [US4] Implement `_compute_rmsd_pass(rmsd_csv_path)` in `pipeline/stages/validate/gates/md.py`: reads RMSD CSV (time_ns, rmsd_A columns), computes mean RMSD over final 10 ns; returns (mean_rmsd, pass_bool); handles timeout case where < 15 ns available → ERROR
+- [X] T033 [US4] Implement `run_md_gate(gene_symbol, scaffold_id, settings, cache, force, console, md_max_cost) -> GateResult` in `pipeline/stages/validate/gates/md.py`
   - Check `RUNPOD_API_KEY` env var; raise ERROR with helpful message if missing
   - Call `_prepare_md_system()` (~5 min local)
   - Call `_estimate_runpod_cost()`; raise ERROR if > md_max_cost
@@ -136,8 +136,8 @@
   - Call `_compute_rmsd_pass()`; build GateResult
   - Save RMSD CSV to `data/results/{gene}/validate_md_{scaffold}_rmsd.csv`
   - Cache and write report
-- [ ] T034 [US4] Write MD report: cost estimate, actual cost, atom count, simulation length, mean RMSD, RMSD plot (ASCII sparkline), PASS/FAIL
-- [ ] T035 [US4] Add unit tests in `tests/unit/test_validate_md.py`: cost estimation logic, RMSD pass/fail threshold, missing API key error, timeout handling (< 15 ns → ERROR)
+- [X] T034 [US4] Write MD report: cost estimate, actual cost, atom count, simulation length, mean RMSD, RMSD plot (ASCII sparkline), PASS/FAIL
+- [X] T035 [US4] Add unit tests in `tests/unit/test_validate_md.py`: cost estimation logic, RMSD pass/fail threshold, missing API key error, timeout handling (< 15 ns → ERROR)
 
 **Checkpoint**: MD gate runs end-to-end with real RunPod API key on SCF-009
 
@@ -151,11 +151,11 @@
 
 ### Implementation
 
-- [ ] T036 [US5] Implement `_load_all_validation_results(gene_symbol, settings, cache)` in `pipeline/stages/validate/validate.py`: scans CacheManager for all `validate_*_{scaffold}` keys for a target; returns dict of scaffold_id → ValidationResult
-- [ ] T037 [US5] Implement `_render_dashboard(gene_symbol, results, console)` in `pipeline/stages/validate/validate.py`: builds Rich Table with scaffolds as rows and ADMET/MM-GBSA/Selectivity/MD/Handoff as columns; colour-codes PASS (green), FAIL (red), ERROR (yellow), NOT_RUN (dim)
-- [ ] T038 [US5] Implement `_write_dashboard_md(gene_symbol, results, settings)` in `pipeline/stages/validate/validate.py`: writes markdown table + links to individual gate reports to `data/results/{gene}/validation_dashboard.md`; writes machine-readable `validation_dashboard.json`
-- [ ] T039 [US5] Implement `_write_wetlab_handoff(gene_symbol, scaffold_id, result, settings)` in `pipeline/stages/validate/validate.py`: generates `wetlab_handoff_{scaffold}.md` with ADMET summary table, MM-GBSA ΔG, selectivity index, MD RMSD, links to all gate reports and existing docking report; only called when `result.handoff_ready == True`
-- [ ] T040 [US5] Implement `run_dashboard(gene_symbol, settings, cache, console)` in `pipeline/stages/validate/validate.py`: calls `_load_all_validation_results()`, renders dashboard, writes markdown, triggers handoff report for any `handoff_ready` scaffold
+- [X] T036 [US5] Implement `_load_all_validation_results(gene_symbol, settings, cache)` in `pipeline/stages/validate/validate.py`: scans CacheManager for all `validate_*_{scaffold}` keys for a target; returns dict of scaffold_id → ValidationResult
+- [X] T037 [US5] Implement `_render_dashboard(gene_symbol, results, console)` in `pipeline/stages/validate/validate.py`: builds Rich Table with scaffolds as rows and ADMET/MM-GBSA/Selectivity/MD/Handoff as columns; colour-codes PASS (green), FAIL (red), ERROR (yellow), NOT_RUN (dim)
+- [X] T038 [US5] Implement `_write_dashboard_md(gene_symbol, results, settings)` in `pipeline/stages/validate/validate.py`: writes markdown table + links to individual gate reports to `data/results/{gene}/validation_dashboard.md`; writes machine-readable `validation_dashboard.json`
+- [X] T039 [US5] Implement `_write_wetlab_handoff(gene_symbol, scaffold_id, result, settings)` in `pipeline/stages/validate/validate.py`: generates `wetlab_handoff_{scaffold}.md` with ADMET summary table, MM-GBSA ΔG, selectivity index, MD RMSD, links to all gate reports and existing docking report; only called when `result.handoff_ready == True`
+- [X] T040 [US5] Implement `run_dashboard(gene_symbol, settings, cache, console)` in `pipeline/stages/validate/validate.py`: calls `_load_all_validation_results()`, renders dashboard, writes markdown, triggers handoff report for any `handoff_ready` scaffold
 
 **Checkpoint**: Dashboard renders correctly with mixed PASS/FAIL/NOT_RUN states; handoff report generated for passing scaffolds
 
@@ -165,17 +165,17 @@
 
 **Purpose**: Wire all gates into the `pipeline validate` CLI command with correct sequencing and `--all-scaffolds` support.
 
-- [ ] T041 Implement `run_validate(gene_symbol, scaffold_id, gate, settings, cache, force, console, md_max_cost)` orchestrator in `pipeline/stages/validate/validate.py`
+- [X] T041 Implement `run_validate(gene_symbol, scaffold_id, gate, settings, cache, force, console, md_max_cost)` orchestrator in `pipeline/stages/validate/validate.py`
   - If `gate` specified: run only that gate
   - If no `gate`: run ADMET → MM-GBSA → Selectivity → MD in sequence; skip MD if any of first 3 = FAIL; skip subsequent gates if any gate = ERROR
   - Persist ValidationResult after each gate completes
   - Trigger handoff report automatically if all gates PASS
-- [ ] T042 Add `validate` command to `pipeline/cli.py` following existing command pattern:
+- [X] T042 Add `validate` command to `pipeline/cli.py` following existing command pattern:
   - Options: `--target`/`-t`, `--all`, `--scaffold`, `--all-scaffolds`, `--top-n`, `--gate`, `--dashboard`, `--force`, `--md-max-cost` (default 5.0), `--data-dir`
   - `--dashboard` mode: call `run_dashboard()` and exit
   - Normal mode: resolve scaffold list via `_resolve_scaffolds()` (existing helper), call `run_validate()` per scaffold
   - Exit code 0 on PASS/FAIL; exit code 1 on ERROR
-- [ ] T043 Add `Bash(pipeline validate *)` to `.claude/settings.json` permissions allow list
+- [X] T043 Add `Bash(pipeline validate *)` to `.claude/settings.json` permissions allow list
 
 **Checkpoint**: `pipeline validate --target VRK1 --scaffold SCF-009` runs full gate sequence from CLI
 
@@ -183,9 +183,9 @@
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T044 [P] Add `pipeline validate` to `pipeline status` command output: show gate completion counts per target alongside existing fetch/analyze/report stages
-- [ ] T045 [P] Update `pipeline rank` command to include ADMET BBB score and MM-GBSA ΔG columns alongside Vina affinity in `scaffold_ranking.md`
-- [ ] T046 [P] Update `quickstart.md` with verified working command examples after end-to-end test on SCF-009
+- [X] T044 [P] Add `pipeline validate` to `pipeline status` command output: show gate completion counts per target alongside existing fetch/analyze/report stages
+- [X] T045 [P] Update `pipeline rank` command to include ADMET BBB score and MM-GBSA ΔG columns alongside Vina affinity in `scaffold_ranking.md`
+- [X] T046 [P] Update `quickstart.md` with verified working command examples after end-to-end test on SCF-009
 - [ ] T047 Run end-to-end validation: `pipeline validate --target VRK1 --scaffold SCF-009` through all gates; confirm output files exist and dashboard renders correctly
 - [ ] T048 Run end-to-end validation for SCF-156 in parallel with SCF-009 to confirm dashboard shows 2-row grid correctly
 

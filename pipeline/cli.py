@@ -656,6 +656,63 @@ def rank(
     raise typer.Exit(exit_code)
 
 
+# ── validate ───────────────────────────────────────────────────────────────────
+
+@app.command()
+def validate(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. VRK1)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    scaffold: Optional[str] = typer.Option(None, "--scaffold", help="Scaffold ID (e.g. SCF-009)"),
+    all_scaffolds: bool = typer.Option(False, "--all-scaffolds", help="Validate all Ro5-passing, non-flagged scaffolds"),
+    top_n: Optional[int] = typer.Option(None, "--top-n", help="With --all-scaffolds: limit to top N by docking affinity"),
+    gate: Optional[str] = typer.Option(None, "--gate", help="Run single gate: admet / mmgbsa / selectivity / md"),
+    dashboard: bool = typer.Option(False, "--dashboard", help="Print gate dashboard and exit"),
+    force: bool = typer.Option(False, "--force", help="Re-run gates even if cached"),
+    md_max_cost: float = typer.Option(5.0, "--md-max-cost", help="Hard cost cap in USD for MD cloud job"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Run computational validation gates (ADMET, MM-GBSA, Selectivity, MD) for a scaffold."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.validate.validate import run_validate, run_dashboard as _run_dashboard
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — validate")
+
+        if dashboard:
+            _run_dashboard(gene, settings, console)
+            continue
+
+        if not scaffold and not all_scaffolds:
+            console.print("[red]Specify --scaffold <ID>, --all-scaffolds, or --dashboard[/red]")
+            raise typer.Exit(1)
+
+        try:
+            scaffolds_to_run = _resolve_scaffolds(scaffold, all_scaffolds, gene, settings, top_n)
+        except FileNotFoundError as exc:
+            console.print(f"  [red]{exc}[/red]")
+            exit_code = 1
+            continue
+
+        if all_scaffolds:
+            console.print(f"  [dim]{gene}:[/dim] {len(scaffolds_to_run)} scaffolds queued")
+
+        for scf in scaffolds_to_run:
+            try:
+                code = run_validate(gene, scf, gate, settings, cache, force, console, md_max_cost)
+                if code != 0:
+                    exit_code = code
+            except Exception as exc:
+                console.print(f"  [red]{gene} validate {scf} FAIL: {exc}[/red]")
+                exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @app.command()
@@ -674,6 +731,7 @@ def status(
     table.add_column("Fetch")
     table.add_column("Analyze")
     table.add_column("Report")
+    table.add_column("Validated")
     table.add_column("Status")
 
     for gene in TARGETS:
@@ -689,6 +747,21 @@ def status(
         analyze_ok = cache.is_stage_complete("analyze", gene)
         report_ok = cache.is_stage_complete("report", gene)
 
+        # Count validated scaffolds
+        import glob as _glob
+        val_files = _glob.glob(str(settings.results_dir / gene / "validation_result_*.json"))
+        val_count = len(val_files)
+        handoff_count = sum(
+            1 for f in val_files
+            if '"handoff_ready": true' in open(f).read()
+        )
+        if val_count == 0:
+            validated_str = "[dim]—[/dim]"
+        elif handoff_count > 0:
+            validated_str = f"[green]{val_count} validated ({handoff_count} handoff-ready)[/green]"
+        else:
+            validated_str = f"[yellow]{val_count} validated[/yellow]"
+
         if report_ok:
             overall = "[green]✓ current[/green]"
         elif fetch_ok or analyze_ok:
@@ -696,6 +769,6 @@ def status(
         else:
             overall = "[red]✗ not run[/red]"
 
-        table.add_row(gene, fmt("fetch"), fmt("analyze"), fmt("report"), overall)
+        table.add_row(gene, fmt("fetch"), fmt("analyze"), fmt("report"), validated_str, overall)
 
     console.print(table)

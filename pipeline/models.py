@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 
@@ -65,6 +69,37 @@ class Structure:
     mean_plddt: Optional[float] = None
     deposition_date: Optional[str] = None
     target_uniprot: str = ""
+
+
+class GateStatus(str, Enum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    ERROR = "ERROR"
+    PENDING = "PENDING"
+    NOT_RUN = "NOT_RUN"
+
+
+@dataclass
+class GateResult:
+    gate_name: str
+    status: GateStatus
+    score: float
+    reason: str
+    details: dict = field(default_factory=dict)
+    report_path: Optional[Path] = None
+    duration_s: float = 0.0
+    timestamp: str = ""
+
+
+@dataclass
+class ValidationResult:
+    gene_symbol: str
+    scaffold_id: str
+    smiles: str
+    gates: dict[str, GateResult] = field(default_factory=dict)
+    overall_pass: bool = False
+    handoff_ready: bool = False
+    created_at: str = ""
 
 
 @dataclass

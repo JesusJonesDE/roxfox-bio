@@ -3,10 +3,13 @@
 ## Prerequisites
 
 ```bash
-# Install new dependencies
-pip install admet-ai
-conda install -c conda-forge gmx_mmpbsa gromacs ambertools openmm \
-  openmmforcefields openff-toolkit mdtraj pdbfixer
+# Verified working on Apple Silicon (Python 3.11, pip environment):
+pip install admet-ai runpod
+pip install openmm pdbfixer
+
+# gmx_MMPBSA requires conda (mpi4py fails to build via pip on ARM64):
+# conda install -c conda-forge gmx_mmpbsa gromacs ambertools
+# Without it, MM-GBSA gate returns ERROR with install instructions — other gates unaffected.
 ```
 
 Existing dependencies (already installed): `vina`, `meeko`, `biopython`, `rdkit`, `pandas`, `rich`, `httpx`.
