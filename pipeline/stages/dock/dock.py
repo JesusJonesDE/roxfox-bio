@@ -527,7 +527,14 @@ def run_dock(
     ligand_pdbqt = _prepare_ligand(smiles, scaffold_id, dock_cache_dir)
 
     # Box centre: ANP/ATP ligand centroid is most accurate; fall back to Cα centroid
-    binding_site_csv = results_dir / "binding_site_vrk1.csv"
+    # Try gene-specific binding site CSV, then generic fallback
+    binding_site_csv = next(
+        (p for p in [
+            results_dir / f"binding_site_{gene_symbol.lower()}.csv",
+            results_dir / "binding_site_vrk1.csv",
+        ] if p.exists()),
+        results_dir / f"binding_site_{gene_symbol.lower()}.csv",
+    )
     console.print(f"  [dim]{gene_symbol}:[/dim] defining docking box...")
     center = _extract_ligand_centroid(pdb_path)
     if center is not None:
