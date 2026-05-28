@@ -21,7 +21,7 @@ pipeline validate [OPTIONS]
 | `--gate` | str | no | None | Run single gate: admet / mmgbsa / selectivity / md |
 | `--dashboard` | flag | no | False | Print gate dashboard and exit (no new gates run) |
 | `--force` | flag | no | False | Re-run gates even if cached results exist |
-| `--md-cloud` | flag | no | True | With --gate md: dispatch 50 ns simulation to RunPod A100 (requires RUNPOD_API_KEY env var) |
+| `--md-max-cost` | float | no | 5.0 | Hard cost cap in USD; pipeline refuses to submit MD job if estimated cost exceeds this value |
 | `--data-dir` | path | no | data/ | Override data directory |
 
 *Either --target or --all required.
@@ -146,7 +146,13 @@ validate_selectivity_{scaffold_id}.md
 - Top docking pose PDBQT
 
 ### Mode
-50 ns explicit solvent (TIP3P), dispatched to RunPod A100. System is prepared locally then submitted via the RunPod API. Requires `RUNPOD_API_KEY` environment variable. Completes in < 6 h at ~$5–10/run.
+20 ns explicit solvent (TIP3P, 10 Å shell), 4 fs timestep via Hydrogen Mass Repartitioning (HMR), dispatched to RunPod community cloud A100. System is prepared locally (~5 min) then submitted via the RunPod API. Requires `RUNPOD_API_KEY` environment variable.
+
+**Cost controls**:
+- `--md-max-cost` (default $5): pipeline estimates cost before submission; raises ERROR if exceeded rather than submitting
+- RunPod job hard timeout: 90 minutes; pipeline analyses whatever trajectory is available if hit
+
+Expected: < 2 h, ~$1–3/run on community A100.
 
 ### Outputs
 ```
@@ -155,8 +161,8 @@ validate_md_{scaffold_id}_rmsd.csv   # time vs RMSD data
 ```
 
 ### Pass/fail criteria
-- Fast mode: mean RMSD over final 1 ns ≤ 3.0 Å → PASS
-- Full mode: mean RMSD over final 25 ns ≤ 3.0 Å → PASS
+- Mean ligand heavy-atom RMSD ≤ 3.0 Å over final 10 ns → PASS
+- If job hits 90-minute timeout: analyse available trajectory; if < 15 ns completed, mark ERROR; otherwise apply same threshold
 
 ---
 

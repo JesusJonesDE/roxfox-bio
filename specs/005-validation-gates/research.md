@@ -113,15 +113,32 @@ conda create -n mmpbsa -c conda-forge gmx_mmpbsa gromacs ambertools rdkit openmm
 
 Local MD on Apple Silicon is not viable for production 50 ns simulations — the official OpenMM CPU path is too slow (0.5–2 ns/day) and the only Metal GPU path is an unmaintained community plugin pinned to a 2-year-old OpenMM version. Cloud is the cleanest, most reliable, and cheapest-per-run option.
 
-**Cloud mode (RunPod A100)**:
+**Cloud mode (RunPod A100, community cloud)**:
 - User provides `RUNPOD_API_KEY` environment variable
-- Pipeline prepares the system locally (PDBFixer + OpenMM parametrisation), serialises to OpenMM XML
-- Submits job to RunPod serverless endpoint, polls for completion, downloads RMSD CSV + trajectory summary
-- ~$5–10 per 50 ns run; completes in 1–6 hours on A100
-- Pass/fail: mean ligand heavy-atom RMSD ≤ 3.0 Å over final 25 ns
+- Pipeline prepares the system locally (PDBFixer + OpenMM parametrisation + HMR), serialises to OpenMM XML
+- Submits job to RunPod community cloud A100 with a 90-minute hard timeout
+- Before submission: pipeline estimates cost from instance type × estimated duration; refuses to submit if estimate exceeds `--md-max-cost` (default $5)
+- ~$1–3 per 20 ns run on community cloud A100; completes in < 2 hours
+- Pass/fail: mean ligand heavy-atom RMSD ≤ 3.0 Å over final 10 ns
 
-**Local preparation** (always runs locally before cloud submission):
-PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller + GAFF2/ff14SB parametrisation → energy minimisation → serialise system XML → submit to RunPod
+**Four optimisations over naive approach**:
+1. **20 ns instead of 50 ns** — sufficient for go/no-go pose stability; most pose drift occurs in first 5–10 ns
+2. **Hydrogen Mass Repartitioning (HMR) → 4 fs timestep** — doubles throughput at no accuracy cost for stability assessment; well-supported in OpenMM
+3. **10 Å solvation shell instead of 12 Å** — reduces atom count by ~20% (~50k vs ~60k atoms)
+4. **RunPod community cloud** — ~$0.89–1.39/hr vs ~$2.49/hr for secure cloud; ~40–50% cheaper
+
+**Combined effect**:
+| Config | Simulation | Timestep | Atoms | Speed | Wall time | Cost |
+|---|---|---|---|---|---|---|
+| Naive | 50 ns | 2 fs | ~60k | ~200 ns/day | ~6 h | ~$12 |
+| Optimised | 20 ns | 4 fs (HMR) | ~50k | ~500 ns/day | **~1 h** | **~$1–3** |
+
+**Hard cost ceiling**:
+- RunPod job `timeout=90min` — job is killed after 90 minutes regardless; pipeline analyses available trajectory
+- Pipeline `--md-max-cost` flag (default $5) — estimates cost before submission; raises ERROR if estimate exceeds cap rather than submitting silently
+
+**Local preparation** (always runs locally, ~5 min):
+PDB + top pose PDBQT → PDBFixer (cap termini, add missing atoms) → OpenMM Modeller + GAFF2/ff14SB parametrisation → HMR application → energy minimisation → serialise system XML → submit to RunPod
 
 **Install**:
 ```bash
@@ -132,7 +149,7 @@ conda install -c conda-forge openmm openmmforcefields openff-toolkit pdbfixer
 pip install runpod
 ```
 
-**Updated spec success criterion SC-004**: "50 ns MD completes in under 6 hours via cloud GPU at a cost of ~$5–10 per scaffold."
+**Updated spec success criterion SC-004**: "20 ns MD completes in under 2 hours via RunPod community cloud A100 at a cost of ~$1–3 per scaffold. Hard cost cap defaults to $5 per job."
 
 ---
 

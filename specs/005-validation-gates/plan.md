@@ -31,7 +31,7 @@ Add four computational validation gates (ADMET, MM-GBSA rescoring, selectivity d
 - ADMET: < 60 s per scaffold
 - MM-GBSA: < 10 min per scaffold (CPU)
 - Selectivity panel: < 2 h per scaffold (4 × Vina docking)
-- MD: < 6 h per scaffold (50 ns explicit solvent, RunPod A100, ~$5–10/run)
+- MD: < 2 h per scaffold (20 ns explicit solvent, HMR 4 fs timestep, RunPod community A100, ~$1–3/run, hard cap $5)
 
 **Constraints**: No paid APIs. No account-required services. Offline-capable for all gates except initial structure downloads.
 
@@ -142,15 +142,16 @@ data/
 - Selectivity index = |target ΔG| / max(|off-target ΔG|); pass if SI ≥ 10
 - VRK2 AlphaFold2 model downloaded from EBI API; flagged with low-confidence warning
 
-### Gate 4 — MD (cloud only)
-- Tool: RunPod API (`runpod` pip package), A100 GPU
+### Gate 4 — MD (cloud only, RunPod A100)
+- Tool: RunPod API (`runpod` pip package), community cloud A100
 - Requires: `RUNPOD_API_KEY` environment variable
-- Local preparation (runs on M1 Max before submission):
-  PDB + top pose PDBQT → PDBFixer → OpenMM Modeller + GAFF2/ff14SB parametrisation → energy minimisation → serialise system XML
-- Cloud execution: submit serialised system to RunPod serverless endpoint, poll for completion, download RMSD CSV
-- 50 ns explicit solvent (TIP3P), ff14SB + GAFF2 forcefield
-- ~$5–10 per run; completes in < 6 h on A100
-- Pass: mean ligand heavy-atom RMSD ≤ 3.0 Å over final 25 ns
+- Hard cost cap: `--md-max-cost` flag (default $5); pipeline estimates cost before submission and raises ERROR if exceeded
+- RunPod job timeout: 90 minutes (hard kill); pipeline analyses available trajectory if hit
+- Local preparation (M1 Max, ~5 min): PDB + top pose PDBQT → PDBFixer → OpenMM Modeller + GAFF2/ff14SB → HMR (4 fs timestep) → energy minimise → serialise OpenMM XML
+- Cloud execution: submit XML to RunPod, poll for completion, download RMSD CSV + summary
+- 20 ns explicit solvent (TIP3P, 10 Å shell), ff14SB + GAFF2, 4 fs timestep (HMR)
+- ~$1–3 per run on community A100; completes in < 2 h
+- Pass: mean ligand heavy-atom RMSD ≤ 3.0 Å over final 10 ns
 
 ### Dashboard
 - Rich Table in terminal (existing Rich dependency)
@@ -164,5 +165,8 @@ data/
 | Design choice | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | Separate `gates/` subdirectory | 4 gates × different dependencies; isolation prevents import errors if one tool not installed | Flat files would mix concerns and make optional-dependency handling harder |
-| Cloud-only MD via RunPod | OpenMM has no official Metal backend; community plugin is unmaintained (Aug 2024), pinned to OpenMM 8.1, source-build only; CPU is 0.5–2 ns/day. Cloud A100 gives 100–800 ns/day at ~$5–10/run — simpler, faster, more reliable | Local CPU/Metal adds complexity and maintenance risk for marginal benefit; cloud is the production-grade path |
+| Cloud-only MD via RunPod | OpenMM has no official Metal backend; community plugin is unmaintained (Aug 2024), pinned to OpenMM 8.1, source-build only; CPU is 0.5–2 ns/day. Cloud A100 gives ~500 ns/day with HMR at ~$1–3/run — simpler, faster, more reliable | Local CPU/Metal adds complexity and maintenance risk for marginal benefit; cloud is the production-grade path |
+| HMR + 4 fs timestep | Doubles throughput at no accuracy cost for pose stability; 20 ns with HMR is equivalent to 40 ns at 2 fs for this use case | Standard 2 fs timestep would double cost and runtime with no scientific benefit for binary pass/fail |
+| 20 ns instead of 50 ns | Pose drift occurs in first 5–10 ns; 20 ns is sufficient for go/no-go decision | 50 ns adds cost and time without changing the pass/fail outcome in the vast majority of cases |
+| Hard $5 cost cap + 90 min timeout | Prevents runaway costs; a job that takes > 90 min indicates a problem worth investigating | No cap would make the gate unpredictable in cost |
 | Reuse `run_dock()` for selectivity | Selectivity is exactly docking against different targets | Reimplementing docking would duplicate 200+ lines |

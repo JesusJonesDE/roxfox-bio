@@ -54,17 +54,23 @@ This takes ~30 minutes and gives you a ranked view of which scaffolds survive th
 
 ---
 
-## Scenario 3: Full 50 ns MD — Cloud GPU (~$5–10, < 6 hours)
+## Scenario 3: MD pose stability — Cloud GPU (~$1–3, < 2 hours)
 
 ```bash
 # Set your RunPod API key (one-time):
 export RUNPOD_API_KEY=your_key_here
 
-# Run the MD gate:
+# Run the MD gate (default cost cap: $5):
 pipeline validate --target VRK1 --scaffold SCF-009 --gate md
 ```
 
-The pipeline prepares the system locally (PDBFixer + OpenMM parametrisation, ~5 min), submits to RunPod A100, polls for completion, and downloads results automatically. Expect 1–6 hours and ~$5–10 per scaffold.
+The pipeline prepares the system locally (~5 min: PDBFixer + OpenMM parametrisation + HMR), estimates the job cost, then submits to RunPod community A100. Expect < 2 hours and ~$1–3 per scaffold.
+
+If the estimated cost exceeds the default $5 cap, the pipeline raises an ERROR before submitting. Override if needed:
+
+```bash
+pipeline validate --target VRK1 --scaffold SCF-009 --gate md --md-max-cost 10
+```
 
 ---
 
@@ -87,8 +93,7 @@ If the file exists, the scaffold is ready for CRO submission.
 | ADMET | BBB > 0.5, all CYP < 0.3, logS > −4, HIA > 0.3 |
 | MM-GBSA | ΔG ≤ −7.0 kcal/mol |
 | Selectivity | Target affinity ≥ 10× better than best off-target |
-| MD (fast) | Mean RMSD ≤ 3.0 Å over final 1 ns |
-| MD (full) | Mean RMSD ≤ 3.0 Å over final 25 ns |
+| MD | Mean RMSD ≤ 3.0 Å over final 10 ns (20 ns total, cloud A100) |
 
 ---
 
