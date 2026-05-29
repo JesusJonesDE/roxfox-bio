@@ -12,14 +12,17 @@ from pipeline.models import GateResult, GateStatus
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _all_pass_preds() -> dict:
-    """Return a flat ADMET-AI predictions dict where all 6 properties pass."""
+    """Return a flat ADMET-AI predictions dict where all 6 properties pass.
+
+    Field names match admet-ai >= 1.0 TDC benchmark naming.
+    """
     return {
-        "BBB_Martini": 0.75,       # pass: > 0.5
-        "CYP1A2_Inhibitor": 0.10,  # pass: < 0.3
-        "CYP2D6_Inhibitor": 0.15,  # pass: < 0.3
-        "CYP3A4_Inhibitor": 0.20,  # pass: < 0.3
-        "Solubility": -2.5,        # pass: > -4
-        "HIA_Hou": 0.85,           # pass: > 0.3
+        "BBB_Martins": 0.75,          # pass: > 0.5
+        "CYP1A2_Veith": 0.10,         # pass: < 0.3
+        "CYP2D6_Veith": 0.15,         # pass: < 0.3
+        "CYP3A4_Veith": 0.20,         # pass: < 0.3
+        "Solubility_AqSolDB": -2.5,   # pass: > -4
+        "HIA_Hou": 0.85,              # pass: > 0.3
     }
 
 
@@ -75,7 +78,7 @@ def test_admet_gate_fail_bbb(
     from pipeline.stages.validate.gates.admet import run_admet_gate
 
     preds = _all_pass_preds()
-    preds["BBB_Martini"] = 0.20  # fail: threshold > 0.5
+    preds["BBB_Martins"] = 0.20  # fail: threshold > 0.5
     MockADMETModel.return_value.predict.return_value = preds
     mock_load_smiles.return_value = "c1ccccc1"
     mock_write_report.return_value = Path("/tmp/validate_admet_SCF-002.md")
@@ -85,7 +88,7 @@ def test_admet_gate_fail_bbb(
     result = run_admet_gate("GENE1", "SCF-002", settings, cache, force=True, console=console)
 
     assert result.status == GateStatus.FAIL
-    assert "BBB_Martini" in result.reason
+    assert "BBB_Martins" in result.reason
     assert result.score == pytest.approx(0.20)
 
 
