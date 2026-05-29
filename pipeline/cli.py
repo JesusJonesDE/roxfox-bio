@@ -713,6 +713,56 @@ def validate(
     raise typer.Exit(exit_code)
 
 
+# ── hitid ──────────────────────────────────────────────────────────────────────
+
+@app.command()
+def hitid(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene name (e.g. IGHMBP2)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    force: bool = typer.Option(False, "--force", help="Re-run even if cached output exists"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Identify hits for targets with no ChEMBL data (IGHMBP2) from BindingDB and PubChem."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.hitid.hitid import run_hitid
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        tgt = TARGETS[gene]
+
+        # Only run for targets with no ChEMBL ID unless --force is passed
+        if tgt.chembl_id is not None and not force:
+            console.print(
+                f"  [dim]{gene:10}[/dim] hitid  [yellow]SKIP[/yellow]  "
+                f"(has ChEMBL ID {tgt.chembl_id} — use --force to override)"
+            )
+            continue
+
+        # Skip if compounds_filtered.csv already exists and --force not set
+        out_csv = settings.results_dir / gene / "compounds_filtered.csv"
+        if out_csv.exists() and not force:
+            cached = cache.load(gene, "hitid")
+            if cached is not None:
+                console.print(
+                    f"  [dim]{gene:10}[/dim] hitid  [yellow]SKIP[/yellow]  "
+                    f"(compounds_filtered.csv exists — use --force to re-run)"
+                )
+                continue
+
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — hitid")
+        try:
+            run_hitid(gene, settings, cache, force, console)
+        except Exception as exc:
+            console.print(f"  [red]{gene} hitid FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @app.command()
