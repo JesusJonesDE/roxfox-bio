@@ -10,10 +10,10 @@
 
 **Purpose**: Install new dependency and create the fragment stage skeleton.
 
-- [ ] T001 Install `sa-score` package: `pip install sa-score` and verify `import sascorer`
-- [ ] T002 Create `pipeline/stages/fragment/__init__.py` (empty)
-- [ ] T003 Commit bundled fallback fragment library to `data/cache/shared/fragment_library/fragments_fallback.smi` — 500 Ro3-compliant SMILES from ZINC (generate from a fixed seed using RDKit random walk or use a known public set)
-- [ ] T004 Create `data/cache/shared/fragment_library/building_blocks.smi` — 20 drug-like BRICS building blocks for fragment growing (common amine, acid, heterocycle building blocks)
+- [X] T001 Install `sa-score` package: `pip install sa-score` and verify `import sascorer`
+- [X] T002 Create `pipeline/stages/fragment/__init__.py` (empty)
+- [X] T003 Commit bundled fallback fragment library to `data/cache/shared/fragment_library/fragments_fallback.smi` — 500 Ro3-compliant SMILES from ZINC (generate from a fixed seed using RDKit random walk or use a known public set)
+- [X] T004 Create `data/cache/shared/fragment_library/building_blocks.smi` — 20 drug-like BRICS building blocks for fragment growing (common amine, acid, heterocycle building blocks)
 
 **Checkpoint**: Dependency installed, skeleton created, fallback data committed
 
@@ -23,9 +23,9 @@
 
 **Purpose**: Shared orchestrator and state tracking used by all steps.
 
-- [ ] T005 Implement `FragmentState` dataclass and `_load_state(gene, settings)` / `_save_state(state, settings)` in `pipeline/stages/fragment/fragment.py` — reads/writes `data/cache/{gene}/fragment_state.json` tracking which steps are complete
-- [ ] T006 Implement `run_fragment(gene_symbol, step, settings, cache, force, top_n, exhaustiveness, library_size, console)` orchestrator in `pipeline/stages/fragment/fragment.py` — calls step functions in order (pocket → library → dock → cluster → grow → admet), skips completed steps unless force, stops on failure with clear message
-- [ ] T007 Implement `_write_fragment_report(gene_symbol, state, pocket, hits, clusters, candidates, settings)` in `pipeline/stages/fragment/fragment.py` — writes `data/results/{gene}/fragment_screen_report.md` with pocket summary, top-10 hits table, cluster summary, grown candidates, ADMET results, next-steps section
+- [X] T005 Implement `FragmentState` dataclass and `_load_state(gene, settings)` / `_save_state(state, settings)` in `pipeline/stages/fragment/fragment.py` — reads/writes `data/cache/{gene}/fragment_state.json` tracking which steps are complete
+- [X] T006 Implement `run_fragment(gene_symbol, step, settings, cache, force, top_n, exhaustiveness, library_size, console)` orchestrator in `pipeline/stages/fragment/fragment.py` — calls step functions in order (pocket → library → dock → cluster → grow → admet), skips completed steps unless force, stops on failure with clear message
+- [X] T007 Implement `_write_fragment_report(gene_symbol, state, pocket, hits, clusters, candidates, settings)` in `pipeline/stages/fragment/fragment.py` — writes `data/results/{gene}/fragment_screen_report.md` with pocket summary, top-10 hits table, cluster summary, grown candidates, ADMET results, next-steps section
 
 **Checkpoint**: Orchestrator wires all steps; `--step` and `--force` flags work
 
@@ -37,7 +37,7 @@
 
 **Independent Test**: Produces `data/results/IGHMBP2/pocket_analysis.json` with volume > 200 Å³ and valid centroid coordinates.
 
-- [ ] T008 [US1] Implement `run_pocket(gene_symbol, settings, cache, force, console) -> dict` in `pipeline/stages/fragment/pocket.py`:
+- [X] T008 [US1] Implement `run_pocket(gene_symbol, settings, cache, force, console) -> dict` in `pipeline/stages/fragment/pocket.py`:
   - Locate AF2 PDB: `data/cache/{gene}/alphafold_*.json` → extract PDB URL → check if PDB already cached in `data/cache/{gene}/structures/`; if not, download from EBI (`https://alphafold.ebi.ac.uk/files/AF-{uniprot}-F1-model_v4.pdb`) to that path
   - Run fpocket via subprocess: `fpocket -f {pdb_path}`; parse output dir `{stem}_out/{stem}_info.txt` with pandas (whitespace-separated)
   - Select top pocket: sort by Druggability_Score descending, filter Volume > 200 Å³; if none found, relax to > 150 Å³ with warning
@@ -46,7 +46,7 @@
   - Cache result with key `"fragment_pocket"` via CacheManager
   - Return pocket dict
 
-- [ ] T009 [US1] Add unit tests in `tests/unit/test_fragment_pocket.py`:
+- [X] T009 [US1] Add unit tests in `tests/unit/test_fragment_pocket.py`:
   - Mock fpocket subprocess returning a sample `_info.txt`; verify correct pocket selected
   - Pocket with volume < 200 Å³ triggers threshold relaxation warning
   - Correct centroid computed from mock pocket PDB
@@ -61,7 +61,7 @@
 
 **Independent Test**: `data/cache/shared/fragment_library/fragments_ro3.smi` exists with ≥5,000 SMILES, all passing MW ≤ 250, HBD ≤ 3, HBA ≤ 3, logP ≤ 3, RotB ≤ 3.
 
-- [ ] T010 [US2] Implement `run_library(library_size, settings, cache, force, console) -> Path` in `pipeline/stages/fragment/library.py`:
+- [X] T010 [US2] Implement `run_library(library_size, settings, cache, force, console) -> Path` in `pipeline/stages/fragment/library.py`:
   - Check if `data/cache/shared/fragment_library/fragments_ro3.smi` exists and is cached; if so, return path (skip download)
   - Download: fetch 5 ZINC22 tranche SMILES files from `https://files.docking.org/2D/{AA}/{AAAA}.smi` using httpx + tenacity; parse line by line (format: `SMILES zinc_id`)
   - Apply Ro3 filter using RDKit: MW ≤ 250, HBD ≤ 3, HBA ≤ 3, logP ≤ 3, RotB ≤ 3; skip invalid SMILES
@@ -72,7 +72,7 @@
   - If ZINC download fails: load `fragments_fallback.smi` with warning; log that fallback was used in state
   - Return path to SMILES file
 
-- [ ] T011 [US2] Add unit tests in `tests/unit/test_fragment_library.py`:
+- [X] T011 [US2] Add unit tests in `tests/unit/test_fragment_library.py`:
   - Ro3 filter: MW=260 fails, MW=200 passes
   - Salt stripping: `Cl.CCO` → `CCO`
   - Murcko dedup: two compounds with same scaffold → 1 retained
@@ -88,7 +88,7 @@
 
 **Independent Test**: `data/results/IGHMBP2/fragment_hits.csv` exists with ≥50 rows, affinity column populated, cache-based resumption works on re-run.
 
-- [ ] T012 [US3] Implement `run_screen(gene_symbol, library_path, pocket, top_n, exhaustiveness, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/screen.py`:
+- [X] T012 [US3] Implement `run_screen(gene_symbol, library_path, pocket, top_n, exhaustiveness, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/screen.py`:
   - Reuse from `pipeline/stages/dock/dock.py`: `_prepare_receptor`, `_prepare_ligand`, `_extract_ligand_centroid` (not needed — use pocket centroid), `_define_box`, `_run_vina`
   - Prepare receptor PDBQT once (reuse dock cache `data/cache/{gene}/dock/{pdb_stem}_receptor.pdbqt`)
   - Box: use pocket centroid as center, box_size=20.0 Å (from pocket dict)
@@ -101,7 +101,7 @@
   - Sort all results by affinity, take top_n; write `data/results/{gene}/fragment_hits.csv`
   - Return DataFrame of top hits
 
-- [ ] T013 [US3] Add unit tests in `tests/unit/test_fragment_screen.py`:
+- [X] T013 [US3] Add unit tests in `tests/unit/test_fragment_screen.py`:
   - Cache hit returns stored result without calling vina
   - meeko failure on one fragment → fragment skipped, screen continues
   - Top-N selection: given 100 docked fragments, returns top 50 by affinity
@@ -117,7 +117,7 @@
 
 **Independent Test**: `data/results/IGHMBP2/fragment_clusters.csv` exists; each row has cluster_id; ≥3 distinct cluster_ids present.
 
-- [ ] T014 [US4] Implement `run_cluster(gene_symbol, hits_df, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/cluster.py`:
+- [X] T014 [US4] Implement `run_cluster(gene_symbol, hits_df, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/cluster.py`:
   - Compute Morgan ECFP4 fingerprints: `AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024)`
   - Compute pairwise Tanimoto distance matrix via `DataStructs.BulkTanimotoSimilarity`
   - Run Butina clustering: `Butina.ClusterData(dists, n, cutoff=0.4, isDistData=True)`
@@ -126,7 +126,7 @@
   - Cache result with key `"fragment_cluster"`
   - Return annotated DataFrame
 
-- [ ] T015 [US4] Add unit tests in `tests/unit/test_fragment_cluster.py`:
+- [X] T015 [US4] Add unit tests in `tests/unit/test_fragment_cluster.py`:
   - 10 identical SMILES → 1 cluster; 10 very different SMILES → 10 clusters
   - Representative = fragment with best (most negative) affinity in cluster
   - Handles single-fragment input (1 cluster, is_representative=True)
@@ -141,23 +141,23 @@
 
 **Independent Test**: `data/results/IGHMBP2/grown_candidates.csv` exists with ≥20 rows; all rows have MW 300–450, passes_ro5=True, sa_score < 4.
 
-- [ ] T016 [US5] Implement `_load_building_blocks(settings) -> list[Mol]` in `pipeline/stages/fragment/grow.py`: reads `data/cache/shared/fragment_library/building_blocks.smi`, returns list of RDKit Mol objects
-- [ ] T017 [US5] Implement `_grow_brics(fragment_mol, building_blocks) -> list[Mol]` in `pipeline/stages/fragment/grow.py`:
+- [X] T016 [US5] Implement `_load_building_blocks(settings) -> list[Mol]` in `pipeline/stages/fragment/grow.py`: reads `data/cache/shared/fragment_library/building_blocks.smi`, returns list of RDKit Mol objects
+- [X] T017 [US5] Implement `_grow_brics(fragment_mol, building_blocks) -> list[Mol]` in `pipeline/stages/fragment/grow.py`:
   - Use `BRICS.BRICSBuild([fragment_mol, bb])` for each building block
   - Collect all products, deduplicate by canonical SMILES
   - Return list of RDKit Mol objects
 
-- [ ] T018 [US5] Implement `_grow_smarts(fragment_mol) -> list[Mol]` in `pipeline/stages/fragment/grow.py`:
+- [X] T018 [US5] Implement `_grow_smarts(fragment_mol) -> list[Mol]` in `pipeline/stages/fragment/grow.py`:
   - Apply 15 SMARTS transformations (amide, sulfonamide, N-methyl, N-ethyl, F-substitution, CF3, ring closure 5/6, ether, thioether, methylenation, Boc-deprotection, Cbz-deprotection, hydroxyl-to-OMe, NH2-to-NHCH3, introduction of pyridine ring)
   - Run each reaction via `AllChem.ReactionFromSmarts(smarts).RunReactants((mol,))`
   - Collect all products, deduplicate
 
-- [ ] T019 [US5] Implement `_filter_grown(mols) -> list[tuple[Mol, dict]]` in `pipeline/stages/fragment/grow.py`:
+- [X] T019 [US5] Implement `_filter_grown(mols) -> list[tuple[Mol, dict]]` in `pipeline/stages/fragment/grow.py`:
   - Apply filters: MW 300–450, Ro5 (0 violations), RotB ≤ 8
   - Compute SA score: `sascorer.calculateScore(mol)` → keep SA < 4
   - Return list of (Mol, {mw, logp, hbd, hba, rotb, sa_score})
 
-- [ ] T020 [US5] Implement `run_grow(gene_symbol, clusters_df, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/grow.py`:
+- [X] T020 [US5] Implement `run_grow(gene_symbol, clusters_df, settings, cache, force, console) -> pd.DataFrame` in `pipeline/stages/fragment/grow.py`:
   - For each cluster representative: run `_grow_brics` + `_grow_smarts`, combine, deduplicate, apply `_filter_grown`
   - Keep top 3 by MW-adjusted score (heavier = more complete) per representative
   - Assign candidate IDs: `IGHMBP2-SCF-{N:03d}`
@@ -165,7 +165,7 @@
   - Cache result with key `"fragment_grow"`
   - If <20 candidates produced: warn; use top representatives directly as candidates
 
-- [ ] T021 [US5] Add unit tests in `tests/unit/test_fragment_grow.py`:
+- [X] T021 [US5] Add unit tests in `tests/unit/test_fragment_grow.py`:
   - `_filter_grown`: MW=600 rejected, MW=350 + SA=3 accepted
   - `_grow_smarts`: benzene fragment → at least 3 valid products
   - `run_grow` with 0 cluster reps → returns empty DataFrame without error
@@ -181,16 +181,16 @@
 
 **Independent Test**: `compounds_filtered.csv` exists with correct column names matching VRK1 schema; `pipeline dock --target IGHMBP2 --all-scaffolds` runs without schema errors.
 
-- [ ] T022 [US6] Implement `run_output(gene_symbol, candidates_df, settings, cache, force, console)` in `pipeline/stages/fragment/output.py`:
+- [X] T022 [US6] Implement `run_output(gene_symbol, candidates_df, settings, cache, force, console)` in `pipeline/stages/fragment/output.py`:
   - For each grown candidate: call `run_admet_gate` from `pipeline/stages/validate/gates/admet.py` with relaxed BBB threshold 0.3 (pass a custom threshold dict override)
   - Build `compounds_filtered.csv` in VRK1 schema: `molecule_id=candidate_id, smiles, best_value_nm=None, best_assay_type="fragment_screen_predicted", molecular_weight, logp, hbd, hba, rotatable_bonds, ro5_violations, passes_ro5, scaffold_id=candidate_id, source="fragment_virtual_screen", off_target_flags=0, selectivity_flag=False`
   - Sort by composite rank: ADMET BBB score descending (higher BBB = better CNS)
   - Write `data/results/{gene}/compounds_filtered.csv`
   - Cache result with key `"fragment_output"`
 
-- [ ] T023 [US6] Implement `_write_fragment_report()` final version in `pipeline/stages/fragment/fragment.py` — fill in full report with: pocket details table, top-10 hits table, cluster summary table, top-10 grown candidates table (with SA score and ADMET BBB), next steps section pointing to `pipeline dock --target IGHMBP2`
+- [X] T023 [US6] Implement `_write_fragment_report()` final version in `pipeline/stages/fragment/fragment.py` — fill in full report with: pocket details table, top-10 hits table, cluster summary table, top-10 grown candidates table (with SA score and ADMET BBB), next steps section pointing to `pipeline dock --target IGHMBP2`
 
-- [ ] T024 [US6] Add unit tests in `tests/unit/test_fragment_output.py`:
+- [X] T024 [US6] Add unit tests in `tests/unit/test_fragment_output.py`:
   - Output CSV has exact column names matching VRK1 schema (test against VRK1 CSV header)
   - BBB threshold override: 0.3 used instead of default 0.5
   - Empty candidates_df → empty CSV with header only, no error
@@ -205,7 +205,7 @@
 
 **Independent Test**: Single command runs all 6 steps in sequence; `--step` flag runs only the specified step; `--force` clears cache and re-runs.
 
-- [ ] T025 [US7] Add `fragment` command to `pipeline/cli.py` following the existing command pattern:
+- [X] T025 [US7] Add `fragment` command to `pipeline/cli.py` following the existing command pattern:
   ```python
   @app.command()
   def fragment(
@@ -221,7 +221,7 @@
   ```
   Import and call `run_fragment()` from `pipeline.stages.fragment.fragment`
 
-- [ ] T026 [US7] Add `"Bash(pipeline fragment *)"` to `.claude/settings.local.json` permissions allow list
+- [X] T026 [US7] Add `"Bash(pipeline fragment *)"` to `.claude/settings.local.json` permissions allow list
 
 **Checkpoint**: `pipeline fragment --help` shows all options; `--step pocket` runs only pocket step
 

@@ -656,6 +656,41 @@ def rank(
     raise typer.Exit(exit_code)
 
 
+# ── fragment ───────────────────────────────────────────────────────────────────
+
+@app.command()
+def fragment(
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="Target gene (e.g. IGHMBP2)"),
+    all_targets: bool = typer.Option(False, "--all", help="Run for all configured targets"),
+    step: Optional[str] = typer.Option(None, "--step", help="Run single step: pocket / library / dock / cluster / grow / admet"),
+    force: bool = typer.Option(False, "--force", help="Re-run all steps ignoring cache"),
+    top_n: int = typer.Option(50, "--top-n", help="Top-N fragment hits to carry forward"),
+    exhaustiveness: int = typer.Option(4, "--exhaustiveness", help="Vina exhaustiveness for fragment docking"),
+    library_size: int = typer.Option(8000, "--library-size", help="Max fragments in library"),
+    data_dir: Optional[Path] = typer.Option(None, "--data-dir", help="Override data directory"),
+):
+    """Fragment-based virtual screening for targets with no published small molecule data (e.g. IGHMBP2)."""
+    from pipeline.cache import CacheManager
+    from pipeline.stages.fragment.fragment import run_fragment
+
+    settings = _make_settings(data_dir, 30)
+    cache = CacheManager(settings)
+    targets = _resolve_targets(target, all_targets)
+
+    exit_code = 0
+    for gene in targets:
+        console.rule(f"[bold cyan]{gene}[/bold cyan] — fragment screen")
+        try:
+            code = run_fragment(gene, step, settings, cache, force, top_n, exhaustiveness, library_size, console)
+            if code != 0:
+                exit_code = code
+        except Exception as exc:
+            console.print(f"  [red]{gene} fragment FAIL: {exc}[/red]")
+            exit_code = 1
+
+    raise typer.Exit(exit_code)
+
+
 # ── validate ───────────────────────────────────────────────────────────────────
 
 @app.command()
